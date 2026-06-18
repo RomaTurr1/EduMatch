@@ -1,0 +1,19 @@
+{
+  "name": "edumatch",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @edumatch/api & npm run dev --workspace @edumatch/web",
+    "build": "npm run build --workspace @edumatch/shared && npm run build --workspace @edumatch/api && npm run build --workspace @edumatch/web",
+    "typecheck": "npm run typecheck --workspace @edumatch/shared && npm run typecheck --workspace @edumatch/api && npm run typecheck --workspace @edumatch/web",
+    "prisma:generate": "npm run prisma:generate --workspace @edumatch/api",
+    "prisma:migrate": "npm run prisma:migrate --workspace @edumatch/api"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}
