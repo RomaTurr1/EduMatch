@@ -1,25 +1,118 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "../config/prisma.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { publicUserSelect } from "../utils/selects.js";
+import { pickSafeExtension, readSingleFileUpload, saveUploadedFile } from "../utils/upload.js";
 
 const projectSchema = z.object({
   title: z.string().min(3),
   description: z.string().min(10),
   techStack: z.array(z.string()).default([]),
-  requiredSkills: z.array(z.string()).default([])
+  requiredSkills: z.array(z.string()).default([]),
+  deadlineAt: z.string().nullable().optional(),
+  startedAt: z.string().nullable().optional(),
+  completedAt: z.string().nullable().optional()
 });
 
 const projectUpdateSchema = projectSchema.partial().extend({
   status: z.enum(["OPEN", "IN_PROGRESS", "COMPLETED", "ARCHIVED"]).optional()
 });
 
+const fileUpdateSchema = z.object({
+  isPinned: z.boolean()
+});
+
+const MAX_PROJECT_FILE_BYTES = 16 * 1024 * 1024;
+const PROJECT_FILE_MIME_EXTENSIONS: Record<string, string> = {
+  "application/pdf": ".pdf",
+  "application/zip": ".zip",
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "text/plain": ".txt",
+  "text/csv": ".csv",
+  "application/msword": ".doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+  "application/vnd.ms-excel": ".xls",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+  "application/vnd.ms-powerpoint": ".ppt",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx"
+};
+
 function projectInclude() {
   return {
     owner: { select: publicUserSelect },
     members: { include: { user: { select: publicUserSelect } } },
-    applications: true
+    applications: true,
+    files: {
+      where: { isPinned: true },
+      include: { uploader: { select: publicUserSelect } },
+      orderBy: { createdAt: "desc" as const }
+    }
   };
+}
+
+function nullableDate(value: string | null | undefined) {
+  if (!value) return value === null ? null : undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw Object.assign(new Error("Invalid project date"), { status: 400 });
+  }
+  return date;
+}
+
+function projectData(input: z.infer<typeof projectUpdateSchema>) {
+  return {
+    ...input,
+    deadlineAt: nullableDate(input.deadlineAt),
+    startedAt: nullableDate(input.startedAt),
+    completedAt: nullableDate(input.completedAt)
+  };
+}
+
+function projectCreateData(input: z.infer<typeof projectSchema>) {
+  return {
+    title: input.title,
+    description: input.description,
+    techStack: input.techStack,
+    requiredSkills: input.requiredSkills,
+    deadlineAt: nullableDate(input.deadlineAt),
+    startedAt: nullableDate(input.startedAt),
+    completedAt: nullableDate(input.completedAt)
+  };
+}
+
+async function addProjectHistory(projectId: string, userId: string, action: string, message: string) {
+  await prisma.projectHistory.create({
+    data: { projectId, userId, action, message }
+  });
+}
+
+async function requireProjectMembership(projectId: string, userId: string) {
+  const membership = await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId } }
+  });
+  if (!membership) {
+    throw Object.assign(new Error("Only project members can use this action"), { status: 403 });
+  }
+  return membership;
+}
+
+async function saveProjectUpload(req: Parameters<typeof readSingleFileUpload>[0], projectId: string) {
+  const upload = await readSingleFileUpload(req, "file", MAX_PROJECT_FILE_BYTES);
+  if (!upload) {
+    throw Object.assign(new Error("File is required"), { status: 400 });
+  }
+
+  if (!PROJECT_FILE_MIME_EXTENSIONS[upload.mimeType]) {
+    throw Object.assign(new Error("Unsupported file type"), { status: 400 });
+  }
+
+  const safeExtension = pickSafeExtension(upload.filename, upload.mimeType, PROJECT_FILE_MIME_EXTENSIONS);
+  const filename = `${randomUUID()}${safeExtension}`;
+  const filePath = await saveUploadedFile(upload, `projects/${projectId}`, filename);
+  return { upload, filename, url: `${req.protocol}://${req.get("host")}${filePath}` };
 }
 
 export const listProjects = asyncHandler(async (req, res) => {
@@ -44,13 +137,24 @@ export const listProjects = asyncHandler(async (req, res) => {
 
 export const createProject = asyncHandler(async (req, res) => {
   const input = projectSchema.parse(req.body);
-  const project = await prisma.project.create({
-    data: {
-      ...input,
-      ownerId: req.user!.userId,
-      members: { create: { userId: req.user!.userId, role: "owner" } }
-    },
-    include: projectInclude()
+  const project = await prisma.$transaction(async (tx) => {
+    const created = await tx.project.create({
+      data: {
+        ...projectCreateData(input),
+        ownerId: req.user!.userId,
+        members: { create: { userId: req.user!.userId, role: "owner" } }
+      },
+      include: projectInclude()
+    });
+    await tx.projectHistory.create({
+      data: {
+        projectId: created.id,
+        userId: req.user!.userId,
+        action: "created",
+        message: "Project was created"
+      }
+    });
+    return created;
   });
   res.status(201).json({ project });
 });
@@ -60,7 +164,19 @@ export const getProject = asyncHandler(async (req, res) => {
     where: { id: req.params.id },
     include: {
       ...projectInclude(),
-      messages: { include: { user: { select: publicUserSelect } }, orderBy: { createdAt: "asc" }, take: 100 }
+      messages: {
+        include: {
+          user: { select: publicUserSelect },
+          files: { include: { uploader: { select: publicUserSelect } } }
+        },
+        orderBy: { createdAt: "asc" },
+        take: 100
+      },
+      history: {
+        include: { user: { select: publicUserSelect } },
+        orderBy: { createdAt: "desc" },
+        take: 30
+      }
     }
   });
 
@@ -83,9 +199,10 @@ export const updateProject = asyncHandler(async (req, res) => {
 
   const updated = await prisma.project.update({
     where: { id: project.id },
-    data: input,
+    data: projectData(input),
     include: projectInclude()
   });
+  await addProjectHistory(project.id, req.user!.userId, "updated", "Project details were updated");
   return res.json({ project: updated });
 });
 
@@ -99,6 +216,48 @@ export const deleteProject = asyncHandler(async (req, res) => {
   }
 
   await prisma.project.delete({ where: { id: project.id } });
+  return res.status(204).send();
+});
+
+export const leaveProject = asyncHandler(async (req, res) => {
+  const project = await prisma.project.findUnique({
+    where: { id: req.params.id },
+    include: { members: true }
+  });
+
+  if (!project) {
+    return res.status(404).json({ message: "Project not found" });
+  }
+
+  if (project.ownerId === req.user!.userId) {
+    return res.status(400).json({ message: "Project owner cannot leave their own project" });
+  }
+
+  const membership = project.members.find((member) => member.userId === req.user!.userId);
+  if (!membership) {
+    return res.status(404).json({ message: "Membership not found" });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.projectMember.deleteMany({
+      where: { projectId: project.id, userId: req.user!.userId }
+    });
+    await tx.application
+      .update({
+        where: { projectId_userId: { projectId: project.id, userId: req.user!.userId } },
+        data: { status: "WITHDRAWN" }
+      })
+      .catch(() => undefined);
+    await tx.projectHistory.create({
+      data: {
+        projectId: project.id,
+        userId: req.user!.userId,
+        action: "left",
+        message: "Left the project"
+      }
+    });
+  });
+
   return res.status(204).send();
 });
 
@@ -120,6 +279,14 @@ export const applyToProject = asyncHandler(async (req, res) => {
       where: { projectId_userId: { projectId: req.params.id, userId: req.user!.userId } },
       update: {},
       create: { projectId: req.params.id, userId: req.user!.userId, role: "member" }
+    });
+    await tx.projectHistory.create({
+      data: {
+        projectId: req.params.id,
+        userId: req.user!.userId,
+        action: "joined",
+        message: "Joined the project"
+      }
     });
 
     return nextApplication;
@@ -160,7 +327,93 @@ export const removeProjectMember = asyncHandler(async (req, res) => {
         data: { status: "REJECTED" }
       })
       .catch(() => undefined);
+    await tx.projectHistory.create({
+      data: {
+        projectId: project.id,
+        userId: req.user!.userId,
+        action: "member_removed",
+        message: "Removed a project member"
+      }
+    });
   });
 
   return res.status(204).send();
+});
+
+export const uploadProjectFile = asyncHandler(async (req, res) => {
+  await requireProjectMembership(req.params.id, req.user!.userId);
+  const saved = await saveProjectUpload(req, req.params.id);
+
+  const file = await prisma.projectFile.create({
+    data: {
+      projectId: req.params.id,
+      uploaderId: req.user!.userId,
+      originalName: saved.upload.filename,
+      filename: saved.filename,
+      mimeType: saved.upload.mimeType,
+      size: saved.upload.size,
+      url: saved.url,
+      isPinned: true
+    },
+    include: { uploader: { select: publicUserSelect } }
+  });
+  await addProjectHistory(req.params.id, req.user!.userId, "file_pinned", `Pinned file: ${saved.upload.filename}`);
+
+  return res.status(201).json({ file });
+});
+
+export const updateProjectFile = asyncHandler(async (req, res) => {
+  const input = fileUpdateSchema.parse(req.body);
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    return res.status(404).json({ message: "Project not found" });
+  }
+  if (project.ownerId !== req.user!.userId) {
+    return res.status(403).json({ message: "Only the owner can update project files" });
+  }
+
+  const file = await prisma.projectFile.update({
+    where: { id: req.params.fileId },
+    data: { isPinned: input.isPinned },
+    include: { uploader: { select: publicUserSelect } }
+  });
+  await addProjectHistory(
+    project.id,
+    req.user!.userId,
+    input.isPinned ? "file_pinned" : "file_unpinned",
+    `${input.isPinned ? "Pinned" : "Unpinned"} file: ${file.originalName}`
+  );
+
+  return res.json({ file });
+});
+
+export const uploadChatFile = asyncHandler(async (req, res) => {
+  await requireProjectMembership(req.params.id, req.user!.userId);
+  const saved = await saveProjectUpload(req, req.params.id);
+
+  const message = await prisma.chatMessage.create({
+    data: {
+      projectId: req.params.id,
+      userId: req.user!.userId,
+      body: `Shared a file: ${saved.upload.filename}`,
+      files: {
+        create: {
+          projectId: req.params.id,
+          uploaderId: req.user!.userId,
+          originalName: saved.upload.filename,
+          filename: saved.filename,
+          mimeType: saved.upload.mimeType,
+          size: saved.upload.size,
+          url: saved.url
+        }
+      }
+    },
+    include: {
+      user: { select: publicUserSelect },
+      files: { include: { uploader: { select: publicUserSelect } } }
+    }
+  });
+  await addProjectHistory(req.params.id, req.user!.userId, "chat_file_uploaded", `Uploaded file to chat: ${saved.upload.filename}`);
+
+  return res.status(201).json({ message });
 });

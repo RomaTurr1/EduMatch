@@ -56,6 +56,32 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return response.status === 204 ? (undefined as T) : response.json();
 }
 
+export async function apiFormData<T>(path: string, formData: FormData): Promise<T> {
+  const headers = new Headers();
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+
+  const response = await fetch(`${API_URL}${path}`, {
+    method: "POST",
+    headers,
+    body: formData
+  });
+
+  if (response.status === 401 && refreshToken) {
+    await refreshAccessToken();
+    headers.set("Authorization", `Bearer ${accessToken}`);
+    const retry = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers,
+      body: formData
+    });
+    if (!retry.ok) throw new Error(await readError(retry));
+    return retry.json();
+  }
+
+  if (!response.ok) throw new Error(await readError(response));
+  return response.json();
+}
+
 async function readError(response: Response) {
   try {
     const body = await response.json();

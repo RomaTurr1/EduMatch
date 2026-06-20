@@ -34,7 +34,10 @@ export function ProjectsPage({ onOpenProject }: Props) {
           title: String(formData.get("title")),
           description: String(formData.get("description")),
           techStack: splitList(formData.get("techStack")),
-          requiredSkills: splitList(formData.get("requiredSkills"))
+          requiredSkills: splitList(formData.get("requiredSkills")),
+          deadlineAt: nullableDate(formData.get("deadlineAt")),
+          startedAt: nullableDate(formData.get("startedAt")),
+          completedAt: nullableDate(formData.get("completedAt"))
         })
       });
       setShowCreate(false);
@@ -89,6 +92,20 @@ export function ProjectsPage({ onOpenProject }: Props) {
           <textarea name="description" placeholder="Description, at least 10 characters" required minLength={10} />
           <input name="techStack" placeholder="React, Node, PostgreSQL" />
           <input name="requiredSkills" placeholder="UI, API, DevOps" />
+          <div className="form-grid">
+            <label>
+              <span>Started</span>
+              <input name="startedAt" type="date" />
+            </label>
+            <label>
+              <span>Deadline</span>
+              <input name="deadlineAt" type="date" />
+            </label>
+            <label>
+              <span>Completed</span>
+              <input name="completedAt" type="date" />
+            </label>
+          </div>
           {createError && <p className="error">{createError}</p>}
           <button className="primary" type="submit">Create</button>
         </form>
@@ -107,4 +124,9 @@ function splitList(value: FormDataEntryValue | null) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function nullableDate(value: FormDataEntryValue | null) {
+  const text = String(value ?? "").trim();
+  return text || null;
 }

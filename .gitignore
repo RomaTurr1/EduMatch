@@ -1,7 +1,30 @@
-node_modules
-dist
+# AI instructions
+EduMatch_AI_CONTEXT.md
+EduMatch_AI_HISTORY.md
+AI_CONTEXT.md
+AI_RULES.md
+AI_CHANGELOG.md
+AI_TODO.md
+AI_RUNBOOK.md
+CLAUDE.md
+ПОМЕТКИ_ДЛЯ_ПОЛЬЗОВАТЕЛЯ.txt
+
+# Environment variables
 .env
-.env.local
+.env.*
+!.env.example
+!**/.env.example
+
+# Node modules
+node_modules/
+
+# Build files
+dist/
+build/
+uploads/
+apps/api/uploads/
+
+# OS / tooling
 .DS_Store
-coverage
+coverage/
 *.log

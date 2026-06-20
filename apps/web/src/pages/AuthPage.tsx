@@ -2,16 +2,19 @@ import { useState } from "react";
 import { ArrowRight, Moon, Sparkles, Sun, UsersRound, Zap } from "lucide-react";
 import { api, setAuth } from "../services/api";
 import type { AuthPayload } from "../types/api";
+import type { ActiveTheme, ThemePreference } from "../App";
 
 type Props = {
-  theme: "dark" | "light";
+  theme: ThemePreference;
+  activeTheme: ActiveTheme;
   onToggleTheme: () => void;
   onAuthenticated: (payload: AuthPayload) => void;
 };
 
-export function AuthPage({ theme, onToggleTheme, onAuthenticated }: Props) {
+export function AuthPage({ theme, activeTheme, onToggleTheme, onAuthenticated }: Props) {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [error, setError] = useState("");
+  const ThemeIcon = activeTheme === "light" ? Sun : Moon;
 
   async function submit(formData: FormData) {
     setError("");
@@ -47,8 +50,8 @@ export function AuthPage({ theme, onToggleTheme, onAuthenticated }: Props) {
 
   return (
     <section className="auth-page">
-      <button className="theme-float" onClick={onToggleTheme} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
-        {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+      <button className="theme-float" onClick={onToggleTheme} title={`Theme: ${theme} (${activeTheme})`}>
+        <ThemeIcon size={18} />
       </button>
       <div className="auth-hero">
         <span className="eyebrow"><Sparkles size={16} /> Student teams, matched faster</span>

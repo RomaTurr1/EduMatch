@@ -26,6 +26,9 @@ model User {
   email        String        @unique
   passwordHash String
   name         String
+  realName     String?
+  age          Int?
+  specialty    String?
   bio          String?
   course       String?
   university   String?
@@ -38,6 +41,8 @@ model User {
   memberships  ProjectMember[]
   applications Application[]
   messages     ChatMessage[]
+  uploadedFiles ProjectFile[]
+  projectHistory ProjectHistory[]
 }
 
 model Project {
@@ -52,6 +57,11 @@ model Project {
   members        ProjectMember[]
   applications   Application[]
   messages       ChatMessage[]
+  files          ProjectFile[]
+  history        ProjectHistory[]
+  deadlineAt     DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
@@ -91,6 +101,40 @@ model ChatMessage {
   projectId String
   userId    String
   body      String
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  files     ProjectFile[]
+
+  @@index([projectId, createdAt])
+}
+
+model ProjectFile {
+  id           String       @id @default(cuid())
+  projectId    String
+  uploaderId   String
+  messageId    String?
+  originalName String
+  filename     String
+  mimeType     String
+  size         Int
+  url          String
+  isPinned     Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploader     User         @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+  message      ChatMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, isPinned])
+  @@index([messageId])
+}
+
+model ProjectHistory {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  action    String
+  message   String
   createdAt DateTime @default(now())
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)

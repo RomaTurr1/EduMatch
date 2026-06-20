@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../config/prisma.js";
 import { createRefreshSession, getRefreshSession, revokeRefreshSession } from "../services/session.service.js";
@@ -36,16 +37,26 @@ async function issueTokens(user: { id: string; email: string }) {
 export const signup = asyncHandler(async (req, res) => {
   const input = signupSchema.parse(req.body);
   const passwordHash = await bcrypt.hash(input.password, 12);
-  const user = await prisma.user.create({
-    data: {
-      email: input.email.toLowerCase(),
-      passwordHash,
-      name: input.name,
-      course: input.course,
-      university: input.university,
-      skills: input.skills
+  const email = input.email.toLowerCase();
+
+  let user;
+  try {
+    user = await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        name: input.name,
+        course: input.course,
+        university: input.university,
+        skills: input.skills
+      }
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return res.status(409).json({ message: "Email already registered" });
     }
-  });
+    throw error;
+  }
 
   const tokens = await issueTokens(user);
   res.status(201).json({ user: toPublicUser(user), ...tokens });
