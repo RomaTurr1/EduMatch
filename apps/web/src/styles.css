@@ -1057,6 +1057,7 @@ textarea {
 .detail-layout {
   display: grid;
   grid-template-columns: minmax(260px, 380px) minmax(0, 1fr);
+  align-items: start;
   gap: 20px;
 }
 
@@ -1108,6 +1109,7 @@ textarea {
 }
 
 .chat-panel {
+  align-self: start;
   padding: clamp(18px, 3vw, 24px);
 }
 
