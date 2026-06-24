@@ -62,6 +62,7 @@ body::before {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -277,6 +278,7 @@ form {
 }
 
 input,
+select,
 textarea {
   width: 100%;
   border: 1px solid var(--border);
@@ -289,11 +291,13 @@ textarea {
 }
 
 :root[data-theme="light"] input,
+:root[data-theme="light"] select,
 :root[data-theme="light"] textarea {
   background: #f8fafc;
 }
 
 input:focus,
+select:focus,
 textarea:focus {
   border-color: color-mix(in srgb, var(--accent), transparent 24%);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent), transparent 86%);
@@ -304,9 +308,68 @@ textarea::placeholder {
   color: color-mix(in srgb, var(--muted), transparent 18%);
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+}
+
 textarea {
   min-height: 120px;
   resize: vertical;
+}
+
+.tag-select {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.tag-select legend {
+  margin: 0 0 2px;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.tag-select-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-select-grid button {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 11px;
+  background: color-mix(in srgb, var(--surface-2), transparent 8%);
+  color: var(--muted);
+  font-weight: 850;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.tag-select-grid button:hover,
+.tag-select-grid button.selected {
+  border-color: color-mix(in srgb, var(--accent), transparent 30%);
+  background: color-mix(in srgb, var(--accent), transparent 82%);
+  color: var(--text);
+}
+
+.tag-select-grid button.selected {
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent), transparent 88%);
 }
 
 .primary,
@@ -367,6 +430,59 @@ textarea {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.project-share-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.project-share-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: 190px;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.project-share-menu button {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--text);
+  background: transparent;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.project-share-link {
+  display: block;
+  max-width: 100%;
+  padding: 6px 10px 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.project-share-menu button:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .danger-action {
@@ -516,6 +632,52 @@ textarea {
   border-radius: 50%;
   background: var(--accent-2);
   box-shadow: 0 0 0 3px var(--surface-solid);
+}
+
+.notifications-menu {
+  position: absolute;
+  top: calc(100% + 16px);
+  right: 112px;
+  width: min(340px, calc(100vw - 24px));
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  background: var(--surface-solid);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  z-index: 102;
+}
+
+.notifications-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.notifications-header small,
+.notifications-menu p,
+.notifications-menu button small {
+  color: var(--muted);
+}
+
+.notifications-menu button {
+  display: grid;
+  gap: 3px;
+  min-height: 58px;
+  padding: 9px;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  transition: background 160ms ease;
+}
+
+.notifications-menu button:hover,
+.notifications-menu button.unread {
+  background: color-mix(in srgb, var(--accent), transparent 88%);
 }
 
 .profile-trigger {
@@ -707,6 +869,21 @@ textarea {
   margin-bottom: 22px;
 }
 
+.edit-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.edit-form-actions .primary,
+.edit-form-actions .danger-action {
+  width: auto;
+  min-height: 40px;
+  padding-inline: 16px;
+}
+
 .profile-settings-page {
   display: grid;
   grid-template-columns: 270px minmax(0, 1fr);
@@ -815,6 +992,7 @@ textarea {
 }
 
 .settings-fields label,
+.settings-fields .field-block,
 .profile-picture-panel {
   display: grid;
   gap: 8px;
@@ -898,6 +1076,15 @@ textarea {
   transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
+.project-card.clickable {
+  cursor: pointer;
+}
+
+.project-card.clickable:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent), transparent 55%);
+  outline-offset: 3px;
+}
+
 .project-card:hover,
 .person-card:hover {
   border-color: color-mix(in srgb, var(--accent), var(--border) 35%);
@@ -917,6 +1104,16 @@ textarea {
   font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.muted-status {
+  color: var(--muted);
+}
+
+.card-open-label {
+  color: var(--accent);
+  font-weight: 900;
+  font-size: 13px;
 }
 
 .card-meta {
@@ -960,13 +1157,21 @@ textarea {
 }
 
 .tags span {
-  background: color-mix(in srgb, var(--accent), transparent 88%);
-  color: var(--text);
+  position: relative;
+  background: color-mix(in srgb, var(--surface-2), transparent 26%);
+  color: color-mix(in srgb, var(--muted), transparent 12%);
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 6px 10px;
   font-size: 12px;
   font-weight: 800;
+}
+
+.tags span.matched {
+  background: color-mix(in srgb, var(--accent), transparent 78%);
+  border-color: color-mix(in srgb, var(--accent), transparent 28%);
+  color: var(--text);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent), transparent 70%);
 }
 
 .avatar {
@@ -1119,22 +1324,107 @@ textarea {
   overflow: auto;
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 8px;
   padding: 16px 8px 16px 0;
 }
 
+.message-row {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  justify-self: start;
+  max-width: min(680px, 92%);
+  cursor: context-menu;
+}
+
+.message-row.own {
+  justify-self: end;
+}
+
+.message-avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  overflow: hidden;
+}
+
+.message-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .message {
-  width: min(680px, 92%);
+  width: fit-content;
+  max-width: 100%;
   background: rgba(148, 163, 184, 0.12);
   border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 12px 14px;
+  border-radius: 18px 18px 18px 6px;
+  padding: 8px 11px;
+  cursor: context-menu;
+}
+
+.message.own {
+  background: color-mix(in srgb, var(--accent), transparent 82%);
+  border-color: color-mix(in srgb, var(--accent), transparent 52%);
+  border-radius: 18px 18px 6px 18px;
+}
+
+.message-actions {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+
+.message-author {
+  display: block;
+  color: var(--accent);
+  font-size: 13px;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.message-time,
+.message-edited {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .message p {
-  margin: 5px 0 0;
+  margin: 0;
   color: var(--muted);
-  line-height: 1.5;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+.message.own p {
+  color: var(--text);
+}
+
+.message-inline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.message-inline p {
+  white-space: nowrap;
+}
+
+.message-meta {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
 }
 
 .message-file {
@@ -1143,9 +1433,96 @@ textarea {
   color: var(--accent);
 }
 
+.message-actions.inline {
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.message-actions button {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: none;
+}
+
+.message-actions button:hover {
+  color: var(--text);
+}
+
+.message-edit {
+  display: grid;
+  gap: 8px;
+}
+
+.message-menu-wrap {
+  position: fixed;
+  z-index: 1000;
+  width: min(230px, calc(100vw - 24px));
+  display: grid;
+  pointer-events: auto;
+}
+
+.message-menu {
+  background: color-mix(in srgb, var(--surface-solid), #0f172a 18%);
+  border: 1px solid color-mix(in srgb, var(--border), white 8%);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(20px);
+}
+
+.message-menu {
+  display: grid;
+  gap: 1px;
+  padding: 6px;
+  border-radius: 14px;
+}
+
+.message-menu button {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 9px;
+  padding: 0 9px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 850;
+  text-align: left;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.message-menu button:hover {
+  background: color-mix(in srgb, var(--accent), transparent 88%);
+}
+
+.message-menu button.danger {
+  color: #fb7185;
+}
+
+.message-menu button svg {
+  flex: 0 0 auto;
+}
+
+.message-menu button span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chat-form {
   grid-template-columns: 1fr 48px 48px;
   margin-top: 12px;
+}
+
+.chat-form textarea {
+  min-height: 48px;
+  max-height: 120px;
+  resize: none;
+  padding-block: 13px;
 }
 
 .chat-form button,
@@ -1259,6 +1636,24 @@ textarea {
 
   .project-actions {
     justify-content: stretch;
+  }
+
+  .project-share-wrap {
+    width: 100%;
+  }
+
+  .project-share-menu {
+    left: 0;
+    right: auto;
+  }
+
+  .edit-form-actions {
+    align-items: flex-start;
+  }
+
+  .edit-form-actions .primary,
+  .edit-form-actions .danger-action {
+    width: auto;
   }
 
   .profile-name {

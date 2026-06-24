@@ -1,8 +1,9 @@
 import { Bell, BookOpen, FolderKanban, LayoutDashboard, LogOut, Moon, Palette, Search, Sun, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ActiveTheme, ThemePreference } from "../App";
-import type { User } from "../types/api";
+import { api } from "../services/api";
+import type { Notification, User } from "../types/api";
 
 type Props = {
   user: User | null;
@@ -12,6 +13,7 @@ type Props = {
   onToggleTheme: () => void;
   onNavigate: (view: string) => void;
   onSignout: () => void;
+  onOpenUserProfile: (userId: string, returnProjectId?: string | null) => void;
   children: ReactNode;
 };
 
@@ -25,9 +27,20 @@ function getInitials(user: User | null) {
   return (user?.name || user?.email || "?").slice(0, 1).toUpperCase();
 }
 
-export function Shell({ user, view, theme, activeTheme, onToggleTheme, onNavigate, onSignout, children }: Props) {
+export function Shell({ user, view, theme, activeTheme, onToggleTheme, onNavigate, onSignout, onOpenUserProfile, children }: Props) {
   const ThemeIcon = activeTheme === "light" ? Sun : Moon;
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  async function loadNotifications() {
+    const result = await api<{ notifications: Notification[] }>("/notifications");
+    setNotifications(result.notifications);
+  }
+
+  useEffect(() => {
+    loadNotifications().catch(console.error);
+  }, []);
 
   function navigateFromMenu(nextView: string) {
     onNavigate(nextView);
@@ -42,6 +55,19 @@ export function Shell({ user, view, theme, activeTheme, onToggleTheme, onNavigat
     setProfileMenuOpen(false);
     void onSignout();
   }
+
+  async function openNotification(notification: Notification) {
+    if (!notification.readAt) {
+      await api(`/notifications/${notification.id}/read`, { method: "PATCH" }).catch(() => undefined);
+      setNotifications((current) => current.map((item) => (item.id === notification.id ? { ...item, readAt: new Date().toISOString() } : item)));
+    }
+    setNotificationsOpen(false);
+    if (notification.actor?.id) {
+      onOpenUserProfile(notification.actor.id, notification.project?.id);
+    }
+  }
+
+  const unreadCount = notifications.filter((notification) => !notification.readAt).length;
 
   return (
     <div className="app-shell">
@@ -67,10 +93,32 @@ export function Shell({ user, view, theme, activeTheme, onToggleTheme, onNavigat
           })}
         </nav>
         <div className="topbar-actions">
-          <button className="notification-button" title="Notifications">
+          <button className="notification-button" title="Notifications" onClick={() => {
+            setNotificationsOpen((open) => !open);
+            void loadNotifications();
+          }}>
             <Bell size={18} />
-            <span aria-hidden="true" />
+            {unreadCount > 0 && <span aria-hidden="true" />}
           </button>
+          {notificationsOpen && (
+            <div className="notifications-menu">
+              <div className="notifications-header">
+                <strong>Notifications</strong>
+                <small>{unreadCount} unread</small>
+              </div>
+              {notifications.length === 0 ? (
+                <p>No notifications yet</p>
+              ) : (
+                notifications.map((notification) => (
+                  <button key={notification.id} className={notification.readAt ? "" : "unread"} onClick={() => void openNotification(notification)}>
+                    <strong>{notification.actor?.name ?? "EduMatch"}</strong>
+                    <span>{notification.message}</span>
+                    {notification.project && <small>{notification.project.title}</small>}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
           <div className="profile-menu-wrap">
             <button
               className={`profile-trigger ${view === "profile" || profileMenuOpen ? "active" : ""}`}

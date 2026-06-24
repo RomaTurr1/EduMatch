@@ -1,6 +1,8 @@
 import { Plus, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ProjectCard } from "../components/ProjectCard";
+import { TagSelect } from "../components/TagSelect";
+import { SKILL_OPTIONS, TECH_STACK_OPTIONS } from "../constants/skillOptions";
 import { api } from "../services/api";
 import type { Project } from "../types/api";
 
@@ -33,8 +35,10 @@ export function ProjectsPage({ onOpenProject }: Props) {
         body: JSON.stringify({
           title: String(formData.get("title")),
           description: String(formData.get("description")),
-          techStack: splitList(formData.get("techStack")),
-          requiredSkills: splitList(formData.get("requiredSkills")),
+          techStack: selectedList(formData, "techStack"),
+          requiredSkills: selectedList(formData, "requiredSkills"),
+          status: String(formData.get("status") || "OPEN"),
+          isOpenToJoin: formData.get("isOpenToJoin") === "on",
           deadlineAt: nullableDate(formData.get("deadlineAt")),
           startedAt: nullableDate(formData.get("startedAt")),
           completedAt: nullableDate(formData.get("completedAt"))
@@ -90,8 +94,24 @@ export function ProjectsPage({ onOpenProject }: Props) {
         >
           <input name="title" placeholder="Project title" required minLength={3} />
           <textarea name="description" placeholder="Description, at least 10 characters" required minLength={10} />
-          <input name="techStack" placeholder="React, Node, PostgreSQL" />
-          <input name="requiredSkills" placeholder="UI, API, DevOps" />
+          <TagSelect name="techStack" label="Tech stack" options={TECH_STACK_OPTIONS} />
+          <TagSelect name="requiredSkills" label="Required skills" options={SKILL_OPTIONS} />
+          <div className="form-grid">
+            <label>
+              <span>Status</span>
+              <select name="status" defaultValue="OPEN">
+                <option value="OPEN">Open</option>
+                <option value="IN_PROGRESS">In progress</option>
+                <option value="PAUSED">Paused</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="ARCHIVED">Archived</option>
+              </select>
+            </label>
+            <label className="checkbox-row">
+              <input name="isOpenToJoin" type="checkbox" defaultChecked />
+              <span>Open to join</span>
+            </label>
+          </div>
           <div className="form-grid">
             <label>
               <span>Started</span>
@@ -119,10 +139,10 @@ export function ProjectsPage({ onOpenProject }: Props) {
   );
 }
 
-function splitList(value: FormDataEntryValue | null) {
-  return String(value ?? "")
-    .split(",")
-    .map((item) => item.trim())
+function selectedList(formData: FormData, field: string) {
+  return formData
+    .getAll(field)
+    .map((item) => String(item).trim())
     .filter(Boolean);
 }
 

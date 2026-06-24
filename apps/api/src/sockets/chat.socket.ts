@@ -55,7 +55,10 @@ export function registerChatSocket(io: Server) {
           userId: socket.data.user.userId,
           body: payload.body.trim()
         },
-        include: { user: { select: publicUserSelect } }
+        include: {
+          user: { select: publicUserSelect },
+          files: { include: { uploader: { select: publicUserSelect } } }
+        }
       });
 
       io.to(`project:${payload.projectId}`).emit("message:new", message);

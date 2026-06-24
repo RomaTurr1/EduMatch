@@ -22,3 +22,12 @@ export const searchTeammates = asyncHandler(async (req, res) => {
 
   res.json({ teammates: users.map(toPublicUser) });
 });
+
+export const getTeammate = asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  res.json({ user: toPublicUser(user) });
+});

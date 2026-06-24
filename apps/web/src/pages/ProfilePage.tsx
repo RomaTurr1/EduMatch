@@ -1,5 +1,7 @@
 import { Bell, GraduationCap, Palette, Pencil, Save, Settings, UserRound } from "lucide-react";
 import { useState, type ChangeEvent } from "react";
+import { TagSelect } from "../components/TagSelect";
+import { CHARACTERISTIC_OPTIONS } from "../constants/skillOptions";
 import { api, apiFormData } from "../services/api";
 import type { User } from "../types/api";
 
@@ -57,10 +59,7 @@ export function ProfilePage({ user, onUpdate }: Props) {
           course: String(formData.get("course")),
           university: String(formData.get("university")),
           avatarUrl: nextAvatarUrl,
-          skills: String(formData.get("skills") || "")
-            .split(",")
-            .map((skill) => skill.trim())
-            .filter(Boolean)
+          skills: selectedList(formData, "skills")
         })
       });
       onUpdate(result.user);
@@ -132,10 +131,9 @@ export function ProfilePage({ user, onUpdate }: Props) {
               <span>Bio</span>
               <textarea name="bio" defaultValue={user.bio ?? ""} placeholder="Tell teammates a little about yourself" />
             </label>
-            <label>
-              <span>Skills</span>
-              <input name="skills" defaultValue={user.skills.join(", ")} placeholder="React, Node, UI" />
-            </label>
+            <div className="field-block">
+              <TagSelect name="skills" label="Skills" options={CHARACTERISTIC_OPTIONS} defaultValue={user.skills} />
+            </div>
           </div>
           <aside className="profile-picture-panel">
             <h2>Profile picture</h2>
@@ -170,4 +168,11 @@ function nullableString(value: FormDataEntryValue | null) {
 function nullableNumber(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
   return text ? Number(text) : null;
+}
+
+function selectedList(formData: FormData, field: string) {
+  return formData
+    .getAll(field)
+    .map((item) => String(item).trim())
+    .filter(Boolean);
 }

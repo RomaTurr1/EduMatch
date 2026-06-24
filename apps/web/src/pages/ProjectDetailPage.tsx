@@ -1,5 +1,8 @@
-import { Calendar, Edit3, FileUp, History, LogOut, Paperclip, PinOff, Send, Trash2, UserMinus, UsersRound, X } from "lucide-react";
-import { useEffect, useState, type ChangeEvent } from "react";
+import { Calendar, Check, Copy, Edit3, FileUp, Link, LogOut, Paperclip, PinOff, Send, Trash2, UserMinus, UsersRound, X } from "lucide-react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
+import { TagSelect } from "../components/TagSelect";
+import { SKILL_OPTIONS, TECH_STACK_OPTIONS } from "../constants/skillOptions";
 import { useSocket } from "../hooks/useSocket";
 import { api, apiFormData } from "../services/api";
 import type { ChatMessage, Project, ProjectFile, User } from "../types/api";
@@ -17,6 +20,11 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
   const [isEditing, setIsEditing] = useState(false);
   const [actionError, setActionError] = useState("");
   const [fileError, setFileError] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingMessageBody, setEditingMessageBody] = useState("");
+  const [messageMenu, setMessageMenu] = useState<{ message: ChatMessage; x: number; y: number } | null>(null);
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   async function loadProject() {
     const result = await api<{ project: Project }>(`/projects/${projectId}`);
@@ -42,6 +50,21 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
     };
   }, [socket, projectId, project, user.id]);
 
+  useEffect(() => {
+    if (!messageMenu) return;
+    const closeMenu = () => setMessageMenu(null);
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("scroll", closeMenu, true);
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+    };
+  }, [messageMenu]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: "end" });
+  }, [messages.length, projectId]);
+
   async function apply() {
     await api(`/projects/${projectId}/applications`, {
       method: "POST",
@@ -64,8 +87,10 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
         body: JSON.stringify({
           title: String(formData.get("title")),
           description: String(formData.get("description")),
-          techStack: splitList(formData.get("techStack")),
-          requiredSkills: splitList(formData.get("requiredSkills")),
+          techStack: selectedList(formData, "techStack"),
+          requiredSkills: selectedList(formData, "requiredSkills"),
+          status: String(formData.get("status")),
+          isOpenToJoin: formData.get("isOpenToJoin") === "on",
           deadlineAt: nullableDate(formData.get("deadlineAt")),
           startedAt: nullableDate(formData.get("startedAt")),
           completedAt: nullableDate(formData.get("completedAt"))
@@ -142,10 +167,101 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
     await loadProject();
   }
 
+  async function regenerateInvite() {
+    if (!project) return;
+    const result = await api<{ project: Project }>(`/projects/${project.id}/invite/regenerate`, { method: "POST" });
+    setProject(result.project);
+    setShareMenuOpen(false);
+  }
+
+  async function copyInviteLink() {
+    if (!project?.inviteCode) return;
+    await navigator.clipboard?.writeText(`${window.location.origin}/invite/${project.inviteCode}`).catch(() => undefined);
+    setShareMenuOpen(false);
+  }
+
+  async function updateApplication(applicationId: string, status: "ACCEPTED" | "REJECTED") {
+    if (!project) return;
+    await api(`/projects/${project.id}/applications/${applicationId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
+    await loadProject();
+  }
+
   function send(formData: FormData) {
     const body = String(formData.get("body") ?? "");
     if (!body.trim()) return;
     socket.emit("message:create", { projectId, body });
+  }
+
+  function submitChatForm(form: HTMLFormElement) {
+    send(new FormData(form));
+    form.reset();
+  }
+
+  function handleChatSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    submitChatForm(event.currentTarget);
+  }
+
+  function handleChatKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    if (event.currentTarget.form) {
+      submitChatForm(event.currentTarget.form);
+    }
+  }
+
+  function startMessageEdit(message: ChatMessage) {
+    setMessageMenu(null);
+    setEditingMessageId(message.id);
+    setEditingMessageBody(message.body);
+  }
+
+  async function updateMessage(messageId: string) {
+    const body = editingMessageBody.trim();
+    if (!project || !body) return;
+    const result = await api<{ message: ChatMessage }>(`/projects/${project.id}/messages/${messageId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ body })
+    });
+    setMessages((current) => current.map((message) => (message.id === messageId ? result.message : message)));
+    setEditingMessageId(null);
+    setEditingMessageBody("");
+  }
+
+  async function deleteMessage(messageId: string, scope: "me" | "everyone") {
+    if (!project) return;
+    setMessageMenu(null);
+    const label = scope === "everyone" ? "Delete this message for everyone?" : "Delete this message for you?";
+    if (!window.confirm(label)) return;
+    await api<void>(`/projects/${project.id}/messages/${messageId}`, {
+      method: "DELETE",
+      body: JSON.stringify({ scope })
+    });
+    setMessages((current) => current.filter((message) => message.id !== messageId));
+  }
+
+  function openMessageMenu(event: MouseEvent, message: ChatMessage) {
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 230;
+    const menuHeight = 190;
+    const isOwnMessage = message.user.id === user.id;
+    const preferredX = isOwnMessage ? rect.right - menuWidth : rect.left + 28;
+    const preferredY = rect.top - 10;
+    setMessageMenu({
+      message,
+      x: Math.max(12, Math.min(preferredX, window.innerWidth - menuWidth - 12)),
+      y: Math.max(12, Math.min(preferredY, window.innerHeight - menuHeight - 12))
+    });
+  }
+
+  async function copyMessageText(message: ChatMessage) {
+    setMessageMenu(null);
+    await navigator.clipboard?.writeText(message.body).catch(() => undefined);
   }
 
   if (!project) return <p>Loading project...</p>;
@@ -153,9 +269,10 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
   const isOwner = project.owner.id === user.id;
   const currentMembership = project.members.find((member) => member.user.id === user.id);
   const canChat = isOwner || Boolean(currentMembership);
-  const canApply = !isOwner && !currentMembership;
+  const canApply = !isOwner && !currentMembership && project.isOpenToJoin && (project.status === "OPEN" || project.status === "IN_PROGRESS");
   const canLeave = !isOwner && Boolean(currentMembership);
   const pinnedFiles = project.files ?? [];
+  const pendingApplications = (project.applications ?? []).filter((application) => application.status === "PENDING");
   const projectDates = [
     ["Created", project.createdAt],
     ["Started", project.startedAt],
@@ -177,10 +294,27 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
                 {isEditing ? <X size={16} /> : <Edit3 size={16} />}
                 {isEditing ? "Cancel" : "Edit"}
               </button>
-              <button className="danger-action compact" onClick={deleteProject}>
-                <Trash2 size={16} />
-                Delete
-              </button>
+              <div className="project-share-wrap">
+                <button className="secondary compact" onClick={() => setShareMenuOpen((open) => !open)}>
+                  <Link size={16} />
+                  Share
+                </button>
+                {shareMenuOpen && (
+                  <div className="project-share-menu">
+                    <small className="project-share-link">
+                      {project.inviteCode ?? "No invite link yet"}
+                    </small>
+                    <button type="button" onClick={() => void copyInviteLink()}>
+                      <Copy size={15} />
+                      Copy link
+                    </button>
+                    <button type="button" onClick={() => void regenerateInvite()}>
+                      <Link size={15} />
+                      Regenerate link
+                    </button>
+                  </div>
+                )}
+              </div>
             </>
           )}
           {canLeave && (
@@ -203,8 +337,24 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
         >
           <input name="title" defaultValue={project.title} placeholder="Project title" required minLength={3} />
           <textarea name="description" defaultValue={project.description} placeholder="Description, at least 10 characters" required minLength={10} />
-          <input name="techStack" defaultValue={project.techStack.join(", ")} placeholder="React, Node, PostgreSQL" />
-          <input name="requiredSkills" defaultValue={project.requiredSkills.join(", ")} placeholder="UI, API, DevOps" />
+          <TagSelect name="techStack" label="Tech stack" options={TECH_STACK_OPTIONS} defaultValue={project.techStack} />
+          <TagSelect name="requiredSkills" label="Required skills" options={SKILL_OPTIONS} defaultValue={project.requiredSkills} />
+          <div className="form-grid">
+            <label>
+              <span>Status</span>
+              <select name="status" defaultValue={project.status}>
+                <option value="OPEN">Open</option>
+                <option value="IN_PROGRESS">In progress</option>
+                <option value="PAUSED">Paused</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="ARCHIVED">Archived</option>
+              </select>
+            </label>
+            <label className="checkbox-row">
+              <input name="isOpenToJoin" type="checkbox" defaultChecked={project.isOpenToJoin} />
+              <span>Open to join</span>
+            </label>
+          </div>
           <div className="form-grid">
             <label>
               <span>Started</span>
@@ -219,7 +369,13 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
               <input name="completedAt" type="date" defaultValue={dateInputValue(project.completedAt)} />
             </label>
           </div>
-          <button className="primary" type="submit">Save changes</button>
+          <div className="edit-form-actions">
+            <button className="primary compact" type="submit">Save changes</button>
+            <button className="danger-action compact" type="button" onClick={deleteProject}>
+              <Trash2 size={16} />
+              Delete project
+            </button>
+          </div>
         </form>
       )}
       <div className={`detail-layout ${canChat ? "" : "single"}`}>
@@ -255,6 +411,28 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
               </div>
             ))}
           </div>
+          {isOwner && pendingApplications.length > 0 && (
+            <>
+              <div className="section-title compact-title">
+                <h2>Join Requests</h2>
+                <span>{pendingApplications.length} pending</span>
+              </div>
+              <div className="member-list">
+                {pendingApplications.map((application) => (
+                  <div key={application.id}>
+                    <span className="member-person">
+                      <span className="avatar small">{application.user?.name.slice(0, 1).toUpperCase()}</span>
+                      <strong>{application.user?.name}</strong>
+                    </span>
+                    <span className="member-actions">
+                      <button className="secondary compact" onClick={() => void updateApplication(application.id, "ACCEPTED")}><Check size={15} />Accept</button>
+                      <button className="danger-icon" onClick={() => void updateApplication(application.id, "REJECTED")} title="Reject request"><X size={15} /></button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
           <div className="section-title compact-title">
             <h2>Skills</h2>
             <span>Stack and roles</span>
@@ -295,22 +473,6 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
             )}
           </div>
           {fileError && <p className="error project-error">{fileError}</p>}
-          <div className="section-title compact-title">
-            <h2>History</h2>
-            <span><History size={14} /> Latest changes</span>
-          </div>
-          <div className="member-list">
-            {(project.history ?? []).length === 0 ? (
-              <div><span>No history yet</span></div>
-            ) : (
-              project.history!.map((item) => (
-                <div key={item.id}>
-                  <span className="history-row"><strong>{item.message}</strong></span>
-                  <span>{formatDate(item.createdAt)}</span>
-                </div>
-              ))
-            )}
-          </div>
         </div>
         {canChat && (
           <div className="chat-panel">
@@ -322,29 +484,103 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
               </div>
             </div>
             <div className="messages">
-              {messages.map((message) => (
-                <div key={message.id} className="message">
-                  <strong>{message.user.name}</strong>
-                  <p>{message.body}</p>
-                  {message.files?.map((file) => (
-                    <a key={file.id} className="message-file" href={file.url} target="_blank" rel="noreferrer">
-                      <Paperclip size={15} />
-                      {file.originalName}
-                    </a>
-                  ))}
-                </div>
-              ))}
+              {messages.map((message) => {
+                const isOwnMessage = message.user.id === user.id;
+                const isMessageEditing = editingMessageId === message.id;
+                const isCompactMessage = isCompactChatMessage(message);
+
+                return (
+                  <div
+                    key={message.id}
+                    className={`message-row ${isOwnMessage ? "own" : ""}`}
+                    onContextMenu={(event) => openMessageMenu(event, message)}
+                  >
+                    {!isOwnMessage && (
+                      <span className="message-avatar">
+                        {message.user.avatarUrl ? <img src={message.user.avatarUrl} alt={message.user.name} /> : message.user.name.slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                    <div
+                      className={`message ${isOwnMessage ? "own" : ""}`}
+                    >
+                      {!isOwnMessage && <strong className="message-author">{message.user.name}</strong>}
+                      {isMessageEditing ? (
+                        <div className="message-edit">
+                          <input
+                            value={editingMessageBody}
+                            onChange={(event) => setEditingMessageBody(event.target.value)}
+                            autoFocus
+                          />
+                          <div className="message-actions inline">
+                            <button type="button" onClick={() => void updateMessage(message.id)}>Save</button>
+                            <button type="button" onClick={() => setEditingMessageId(null)}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : isCompactMessage ? (
+                        <div className="message-inline">
+                          <p>{message.body}</p>
+                          <span className="message-time">{formatTime(message.createdAt)}</span>
+                        </div>
+                      ) : (
+                        <p>{message.body}</p>
+                      )}
+                      {message.files?.map((file) => (
+                        <a key={file.id} className="message-file" href={file.url} target="_blank" rel="noreferrer">
+                          <Paperclip size={15} />
+                          {file.originalName}
+                        </a>
+                      ))}
+                      {!isCompactMessage && (
+                        <div className="message-meta">
+                          {message.editedAt && !isMessageEditing && <span className="message-edited">edited</span>}
+                          <span className="message-time">{formatTime(message.createdAt)}</span>
+                        </div>
+                      )}
+                      {isCompactMessage && message.editedAt && !isMessageEditing && <span className="message-edited">edited</span>}
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={messagesEndRef} />
             </div>
+            {messageMenu && createPortal(
+              <div
+                className="message-menu-wrap"
+                style={{ left: messageMenu.x, top: messageMenu.y }}
+                onClick={(event) => event.stopPropagation()}
+                onContextMenu={(event) => event.preventDefault()}
+              >
+                <div className="message-menu">
+                  <button type="button" onClick={() => void copyMessageText(messageMenu.message)}>
+                    <Copy size={18} />
+                    <span>Copy text</span>
+                  </button>
+                  {messageMenu.message.user.id === user.id && (
+                    <button type="button" onClick={() => startMessageEdit(messageMenu.message)}>
+                      <Edit3 size={18} />
+                      <span>Edit</span>
+                    </button>
+                  )}
+                  <button type="button" onClick={() => void deleteMessage(messageMenu.message.id, "me")}>
+                    <Trash2 size={18} />
+                    <span>Delete for me</span>
+                  </button>
+                  {(messageMenu.message.user.id === user.id || isOwner) && (
+                    <button type="button" className="danger" onClick={() => void deleteMessage(messageMenu.message.id, "everyone")}>
+                      <Trash2 size={18} />
+                      <span>Delete for everyone</span>
+                    </button>
+                  )}
+                </div>
+              </div>,
+              document.body
+            )}
             <form
               className="chat-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                send(new FormData(event.currentTarget));
-                event.currentTarget.reset();
-              }}
+              onSubmit={handleChatSubmit}
             >
-              <input name="body" placeholder="Message the project room" />
-              <label className="secondary compact chat-upload" title="Attach file">
+              <textarea name="body" placeholder="Message the project room" rows={1} onKeyDown={handleChatKeyDown} />
+              <label className="secondary compact chat-upload" title="Attach file up to 16 MB">
                 <Paperclip size={18} />
                 <input type="file" onChange={uploadChatFile} />
               </label>
@@ -357,10 +593,10 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
   );
 }
 
-function splitList(value: FormDataEntryValue | null) {
-  return String(value ?? "")
-    .split(",")
-    .map((item) => item.trim())
+function selectedList(formData: FormData, field: string) {
+  return formData
+    .getAll(field)
+    .map((item) => String(item).trim())
     .filter(Boolean);
 }
 
@@ -375,6 +611,14 @@ function dateInputValue(value?: string | null) {
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+}
+
+function formatTime(value: string) {
+  return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+function isCompactChatMessage(message: ChatMessage) {
+  return !message.files?.length && !message.body.includes("\n") && message.body.length <= 42;
 }
 
 function formatBytes(value: number) {

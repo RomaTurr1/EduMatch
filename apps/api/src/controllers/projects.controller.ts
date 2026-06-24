@@ -10,17 +10,27 @@ const projectSchema = z.object({
   description: z.string().min(10),
   techStack: z.array(z.string()).default([]),
   requiredSkills: z.array(z.string()).default([]),
+  status: z.enum(["OPEN", "IN_PROGRESS", "PAUSED", "COMPLETED", "ARCHIVED"]).optional(),
+  isOpenToJoin: z.boolean().optional(),
   deadlineAt: z.string().nullable().optional(),
   startedAt: z.string().nullable().optional(),
   completedAt: z.string().nullable().optional()
 });
 
 const projectUpdateSchema = projectSchema.partial().extend({
-  status: z.enum(["OPEN", "IN_PROGRESS", "COMPLETED", "ARCHIVED"]).optional()
+  status: z.enum(["OPEN", "IN_PROGRESS", "PAUSED", "COMPLETED", "ARCHIVED"]).optional()
 });
 
 const fileUpdateSchema = z.object({
   isPinned: z.boolean()
+});
+
+const messageUpdateSchema = z.object({
+  body: z.string().trim().min(1).max(2000)
+});
+
+const messageDeleteSchema = z.object({
+  scope: z.enum(["me", "everyone"]).default("me")
 });
 
 const MAX_PROJECT_FILE_BYTES = 16 * 1024 * 1024;
@@ -44,13 +54,32 @@ function projectInclude() {
   return {
     owner: { select: publicUserSelect },
     members: { include: { user: { select: publicUserSelect } } },
-    applications: true,
+    applications: { include: { user: { select: publicUserSelect } }, orderBy: { updatedAt: "desc" as const } },
     files: {
       where: { isPinned: true },
       include: { uploader: { select: publicUserSelect } },
       orderBy: { createdAt: "desc" as const }
     }
   };
+}
+
+function inviteCode() {
+  return randomUUID().replace(/-/g, "").slice(0, 16);
+}
+
+function canJoinProject(project: { status: string; isOpenToJoin: boolean }) {
+  return project.isOpenToJoin && (project.status === "OPEN" || project.status === "IN_PROGRESS");
+}
+
+function canRequestInvite(project: { status: string }) {
+  return project.status === "OPEN" || project.status === "IN_PROGRESS";
+}
+
+function redactInviteCode<T extends { ownerId?: string; inviteCode?: string | null }>(project: T, userId: string): T {
+  if (project.ownerId !== userId) {
+    return { ...project, inviteCode: null };
+  }
+  return project;
 }
 
 function nullableDate(value: string | null | undefined) {
@@ -77,6 +106,8 @@ function projectCreateData(input: z.infer<typeof projectSchema>) {
     description: input.description,
     techStack: input.techStack,
     requiredSkills: input.requiredSkills,
+    status: input.status ?? "OPEN",
+    isOpenToJoin: input.isOpenToJoin ?? true,
     deadlineAt: nullableDate(input.deadlineAt),
     startedAt: nullableDate(input.startedAt),
     completedAt: nullableDate(input.completedAt)
@@ -132,7 +163,7 @@ export const listProjects = asyncHandler(async (req, res) => {
     orderBy: { createdAt: "desc" }
   });
 
-  res.json({ projects });
+  res.json({ projects: projects.map((project) => redactInviteCode(project, req.user!.userId)) });
 });
 
 export const createProject = asyncHandler(async (req, res) => {
@@ -141,6 +172,7 @@ export const createProject = asyncHandler(async (req, res) => {
     const created = await tx.project.create({
       data: {
         ...projectCreateData(input),
+        inviteCode: inviteCode(),
         ownerId: req.user!.userId,
         members: { create: { userId: req.user!.userId, role: "owner" } }
       },
@@ -156,7 +188,7 @@ export const createProject = asyncHandler(async (req, res) => {
     });
     return created;
   });
-  res.status(201).json({ project });
+  res.status(201).json({ project: redactInviteCode(project, req.user!.userId) });
 });
 
 export const getProject = asyncHandler(async (req, res) => {
@@ -165,6 +197,9 @@ export const getProject = asyncHandler(async (req, res) => {
     include: {
       ...projectInclude(),
       messages: {
+        where: {
+          hiddenFor: { none: { userId: req.user!.userId } }
+        },
         include: {
           user: { select: publicUserSelect },
           files: { include: { uploader: { select: publicUserSelect } } }
@@ -184,7 +219,7 @@ export const getProject = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "Project not found" });
   }
 
-  return res.json({ project });
+  return res.json({ project: redactInviteCode(project, req.user!.userId) });
 });
 
 export const updateProject = asyncHandler(async (req, res) => {
@@ -203,7 +238,7 @@ export const updateProject = asyncHandler(async (req, res) => {
     include: projectInclude()
   });
   await addProjectHistory(project.id, req.user!.userId, "updated", "Project details were updated");
-  return res.json({ project: updated });
+  return res.json({ project: redactInviteCode(updated, req.user!.userId) });
 });
 
 export const deleteProject = asyncHandler(async (req, res) => {
@@ -267,6 +302,9 @@ export const applyToProject = asyncHandler(async (req, res) => {
     const project = await tx.project.findUnique({ where: { id: req.params.id } });
     if (!project) {
       throw Object.assign(new Error("Project not found"), { status: 404 });
+    }
+    if (!canJoinProject(project)) {
+      throw Object.assign(new Error("This project is not accepting applications"), { status: 403 });
     }
 
     const nextApplication = await tx.application.upsert({
@@ -416,4 +454,202 @@ export const uploadChatFile = asyncHandler(async (req, res) => {
   await addProjectHistory(req.params.id, req.user!.userId, "chat_file_uploaded", `Uploaded file to chat: ${saved.upload.filename}`);
 
   return res.status(201).json({ message });
+});
+
+export const useProjectInvite = asyncHandler(async (req, res) => {
+  const project = await prisma.project.findUnique({
+    where: { inviteCode: req.params.code },
+    include: projectInclude()
+  });
+
+  if (!project) {
+    return res.status(404).json({ message: "Invite link not found" });
+  }
+
+  const existingMembership = project.members.find((member) => member.userId === req.user!.userId);
+  if (existingMembership) {
+    return res.json({ action: "already_member", project: redactInviteCode(project, req.user!.userId) });
+  }
+
+  if (!canRequestInvite(project)) {
+    return res.json({ action: "view_only", project: redactInviteCode(project, req.user!.userId) });
+  }
+
+  if (canJoinProject(project)) {
+    await prisma.$transaction(async (tx) => {
+      await tx.application.upsert({
+        where: { projectId_userId: { projectId: project.id, userId: req.user!.userId } },
+        update: { status: "ACCEPTED" },
+        create: { projectId: project.id, userId: req.user!.userId, status: "ACCEPTED" }
+      });
+      await tx.projectMember.upsert({
+        where: { projectId_userId: { projectId: project.id, userId: req.user!.userId } },
+        update: {},
+        create: { projectId: project.id, userId: req.user!.userId, role: "member" }
+      });
+    });
+
+    const updated = await prisma.project.findUniqueOrThrow({ where: { id: project.id }, include: projectInclude() });
+    return res.json({ action: "joined", project: redactInviteCode(updated, req.user!.userId) });
+  }
+
+  const application = await prisma.application.upsert({
+    where: { projectId_userId: { projectId: project.id, userId: req.user!.userId } },
+    update: { status: "PENDING" },
+    create: { projectId: project.id, userId: req.user!.userId, status: "PENDING" }
+  });
+
+  const existingNotification = await prisma.notification.findFirst({
+    where: {
+      userId: project.ownerId,
+      actorId: req.user!.userId,
+      projectId: project.id,
+      type: "INVITE_REQUEST",
+      readAt: null
+    }
+  });
+
+  if (!existingNotification) {
+    await prisma.notification.create({
+      data: {
+        userId: project.ownerId,
+        actorId: req.user!.userId,
+        projectId: project.id,
+        type: "INVITE_REQUEST",
+        message: "wants to join your project via invite link"
+      }
+    });
+  }
+
+  return res.json({ action: "requested", application, project: redactInviteCode(project, req.user!.userId) });
+});
+
+export const regenerateProjectInvite = asyncHandler(async (req, res) => {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    return res.status(404).json({ message: "Project not found" });
+  }
+  if (project.ownerId !== req.user!.userId) {
+    return res.status(403).json({ message: "Only the owner can regenerate invite links" });
+  }
+
+  const updated = await prisma.project.update({
+    where: { id: project.id },
+    data: { inviteCode: inviteCode() },
+    include: projectInclude()
+  });
+
+  return res.json({ project: updated });
+});
+
+export const updateProjectApplication = asyncHandler(async (req, res) => {
+  const input = z.object({ status: z.enum(["ACCEPTED", "REJECTED"]) }).parse(req.body);
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+  if (!project) {
+    return res.status(404).json({ message: "Project not found" });
+  }
+  if (project.ownerId !== req.user!.userId) {
+    return res.status(403).json({ message: "Only the owner can update applications" });
+  }
+
+  const application = await prisma.application.findUnique({
+    where: { id: req.params.applicationId },
+    include: { user: { select: publicUserSelect } }
+  });
+  if (!application || application.projectId !== project.id) {
+    return res.status(404).json({ message: "Application not found" });
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const nextApplication = await tx.application.update({
+      where: { id: application.id },
+      data: { status: input.status },
+      include: { user: { select: publicUserSelect } }
+    });
+
+    if (input.status === "ACCEPTED") {
+      await tx.projectMember.upsert({
+        where: { projectId_userId: { projectId: project.id, userId: application.userId } },
+        update: {},
+        create: { projectId: project.id, userId: application.userId, role: "member" }
+      });
+    } else {
+      await tx.projectMember.deleteMany({
+        where: { projectId: project.id, userId: application.userId }
+      });
+    }
+
+    await tx.notification.create({
+      data: {
+        userId: application.userId,
+        actorId: req.user!.userId,
+        projectId: project.id,
+        type: input.status === "ACCEPTED" ? "APPLICATION_ACCEPTED" : "APPLICATION_REJECTED",
+        message: input.status === "ACCEPTED" ? "accepted your project request" : "rejected your project request"
+      }
+    });
+
+    return nextApplication;
+  });
+
+  return res.json({ application: updated });
+});
+
+export const updateChatMessage = asyncHandler(async (req, res) => {
+  const input = messageUpdateSchema.parse(req.body);
+  const message = await prisma.chatMessage.findUnique({
+    where: { id: req.params.messageId },
+    include: { project: true }
+  });
+
+  if (!message || message.projectId !== req.params.id) {
+    return res.status(404).json({ message: "Message not found" });
+  }
+
+  await requireProjectMembership(message.projectId, req.user!.userId);
+  if (message.userId !== req.user!.userId) {
+    return res.status(403).json({ message: "Only the message author can edit this message" });
+  }
+
+  const updated = await prisma.chatMessage.update({
+    where: { id: message.id },
+    data: { body: input.body, editedAt: new Date() },
+    include: {
+      user: { select: publicUserSelect },
+      files: { include: { uploader: { select: publicUserSelect } } }
+    }
+  });
+
+  return res.json({ message: updated });
+});
+
+export const deleteChatMessage = asyncHandler(async (req, res) => {
+  const input = messageDeleteSchema.parse(req.body);
+  const message = await prisma.chatMessage.findUnique({
+    where: { id: req.params.messageId },
+    include: { project: true }
+  });
+
+  if (!message || message.projectId !== req.params.id) {
+    return res.status(404).json({ message: "Message not found" });
+  }
+
+  await requireProjectMembership(message.projectId, req.user!.userId);
+  if (input.scope === "everyone") {
+    const canDeleteForEveryone = message.userId === req.user!.userId || message.project.ownerId === req.user!.userId;
+    if (!canDeleteForEveryone) {
+      return res.status(403).json({ message: "Only the author or project owner can delete this message for everyone" });
+    }
+
+    await prisma.chatMessage.delete({ where: { id: message.id } });
+    return res.status(204).send();
+  }
+
+  await prisma.chatMessageHidden.upsert({
+    where: { messageId_userId: { messageId: message.id, userId: req.user!.userId } },
+    update: {},
+    create: { messageId: message.id, userId: req.user!.userId }
+  });
+
+  return res.status(204).send();
 });

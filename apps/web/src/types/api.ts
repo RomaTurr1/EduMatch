@@ -19,9 +19,12 @@ export type Project = {
   description: string;
   techStack: string[];
   requiredSkills: string[];
-  status: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "ARCHIVED";
+  status: "OPEN" | "IN_PROGRESS" | "PAUSED" | "COMPLETED" | "ARCHIVED";
+  isOpenToJoin: boolean;
+  inviteCode?: string | null;
   owner: User;
   members: Array<{ id: string; role: string; user: User }>;
+  applications?: Application[];
   files?: ProjectFile[];
   history?: ProjectHistory[];
   messages?: ChatMessage[];
@@ -31,7 +34,9 @@ export type Project = {
   createdAt: string;
   updatedAt: string;
   matchScore?: number;
+  matchPercent?: number;
   matchSkills?: string[];
+  matchReasons?: string[];
 };
 
 export type Application = {
@@ -39,12 +44,14 @@ export type Application = {
   status: "PENDING" | "ACCEPTED" | "REJECTED" | "WITHDRAWN";
   note?: string | null;
   project: Project;
+  user?: User;
 };
 
 export type ChatMessage = {
   id: string;
   body: string;
   createdAt: string;
+  editedAt?: string | null;
   user: User;
   files?: ProjectFile[];
 };
@@ -67,6 +74,16 @@ export type ProjectHistory = {
   message: string;
   createdAt: string;
   user: User;
+};
+
+export type Notification = {
+  id: string;
+  type: string;
+  message: string;
+  readAt?: string | null;
+  createdAt: string;
+  actor?: User | null;
+  project?: Project | null;
 };
 
 export type AuthPayload = {

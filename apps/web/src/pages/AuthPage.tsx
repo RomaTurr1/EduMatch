@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { ArrowRight, Moon, Sparkles, Sun, UsersRound, Zap } from "lucide-react";
+import { TagSelect } from "../components/TagSelect";
+import { CHARACTERISTIC_OPTIONS } from "../constants/skillOptions";
 import { api, setAuth } from "../services/api";
 import type { AuthPayload } from "../types/api";
 import type { ActiveTheme, ThemePreference } from "../App";
@@ -26,10 +28,7 @@ export function AuthPage({ theme, activeTheme, onToggleTheme, onAuthenticated }:
             password: String(formData.get("password")),
             course: String(formData.get("course") || ""),
             university: String(formData.get("university") || ""),
-            skills: String(formData.get("skills") || "")
-              .split(",")
-              .map((value) => value.trim())
-              .filter(Boolean)
+            skills: selectedList(formData, "skills")
           }
         : {
             email: String(formData.get("email")),
@@ -96,7 +95,7 @@ export function AuthPage({ theme, activeTheme, onToggleTheme, onAuthenticated }:
               <input name="name" placeholder="Full name" required />
               <input name="course" placeholder="Course" />
               <input name="university" placeholder="University" />
-              <input name="skills" placeholder="Skills, comma separated" />
+              <TagSelect name="skills" label="Skills" options={CHARACTERISTIC_OPTIONS} />
             </>
           )}
           <input name="email" type="email" placeholder="Email" required />
@@ -109,4 +108,11 @@ export function AuthPage({ theme, activeTheme, onToggleTheme, onAuthenticated }:
       </div>
     </section>
   );
+}
+
+function selectedList(formData: FormData, field: string) {
+  return formData
+    .getAll(field)
+    .map((item) => String(item).trim())
+    .filter(Boolean);
 }
