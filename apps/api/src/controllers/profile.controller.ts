@@ -6,13 +6,13 @@ import { toPublicUser } from "../utils/publicUser.js";
 import { pickSafeExtension, readSingleFileUpload, saveUploadedFile } from "../utils/upload.js";
 
 const updateProfileSchema = z.object({
-  name: z.string().min(2).optional(),
-  realName: z.string().nullable().optional(),
+  name: z.string().trim().min(2).max(18).optional(),
+  realName: z.string().trim().max(80).nullable().optional(),
   age: z.number().int().min(13).max(100).nullable().optional(),
-  specialty: z.string().nullable().optional(),
+  specialty: z.string().trim().max(60).nullable().optional(),
   bio: z.string().max(1000).nullable().optional(),
-  course: z.string().nullable().optional(),
-  university: z.string().nullable().optional(),
+  course: z.string().trim().max(80).nullable().optional(),
+  university: z.string().trim().max(80).nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
   skills: z.array(z.string()).optional()
 });

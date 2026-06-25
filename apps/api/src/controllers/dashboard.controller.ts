@@ -2,8 +2,12 @@ import { prisma } from "../config/prisma.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { publicUserSelect } from "../utils/selects.js";
 
-function redactInviteCode<T extends { ownerId?: string; inviteCode?: string | null }>(project: T, userId: string): T {
-  if (project.ownerId !== userId) {
+function canAccessProjectInvite(project: { ownerId?: string; members?: Array<{ userId?: string; user?: { id?: string } }> }, userId: string) {
+  return project.ownerId === userId || Boolean(project.members?.some((member) => member.userId === userId || member.user?.id === userId));
+}
+
+function redactInviteCode<T extends { ownerId?: string; inviteCode?: string | null; members?: Array<{ userId?: string; user?: { id?: string } }> }>(project: T, userId: string): T {
+  if (!canAccessProjectInvite(project, userId)) {
     return { ...project, inviteCode: null };
   }
   return project;

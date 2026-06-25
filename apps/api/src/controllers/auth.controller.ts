@@ -10,9 +10,9 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
-  name: z.string().min(2),
-  course: z.string().optional(),
-  university: z.string().optional(),
+  name: z.string().trim().min(2).max(18),
+  course: z.string().trim().max(80).optional(),
+  university: z.string().trim().max(80).optional(),
   skills: z.array(z.string()).default([])
 });
 

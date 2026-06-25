@@ -92,7 +92,7 @@ export function AuthPage({ theme, activeTheme, onToggleTheme, onAuthenticated }:
         >
           {mode === "signup" && (
             <>
-              <input name="name" placeholder="Full name" required />
+              <input name="name" placeholder="Display name" required minLength={2} maxLength={18} />
               <input name="course" placeholder="Course" />
               <input name="university" placeholder="University" />
               <TagSelect name="skills" label="Skills" options={CHARACTERISTIC_OPTIONS} />

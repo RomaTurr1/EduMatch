@@ -2,11 +2,18 @@ import { prisma } from "../config/prisma.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { publicUserSelect } from "../utils/selects.js";
 
-function redactInviteCode<T extends { project?: { ownerId?: string; inviteCode?: string | null } | null }>(
+function canAccessProjectInvite(project: { ownerId?: string; members?: Array<{ userId?: string; user?: { id?: string } }> }, userId: string) {
+  return project.ownerId === userId || Boolean(project.members?.some((member) => member.userId === userId || member.user?.id === userId));
+}
+
+function redactInviteCode<T extends { type?: string; project?: { ownerId?: string; inviteCode?: string | null; members?: Array<{ userId?: string; user?: { id?: string } }> } | null }>(
   notification: T,
   userId: string
 ) {
-  if (notification.project && notification.project.ownerId !== userId) {
+  if (notification.type === "PROJECT_INVITE") {
+    return notification;
+  }
+  if (notification.project && !canAccessProjectInvite(notification.project, userId)) {
     return { ...notification, project: { ...notification.project, inviteCode: null } };
   }
   return notification;

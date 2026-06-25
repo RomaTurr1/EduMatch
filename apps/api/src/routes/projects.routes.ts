@@ -5,6 +5,7 @@ import {
   deleteProject,
   deleteChatMessage,
   getProject,
+  inviteStudentToProject,
   leaveProject,
   listProjects,
   regenerateProjectInvite,
@@ -29,6 +30,7 @@ projectsRouter.patch("/:id", requireAuth, updateProject);
 projectsRouter.delete("/:id", requireAuth, deleteProject);
 projectsRouter.delete("/:id/membership", requireAuth, leaveProject);
 projectsRouter.post("/:id/invite/regenerate", requireAuth, regenerateProjectInvite);
+projectsRouter.post("/:id/invitations", requireAuth, inviteStudentToProject);
 projectsRouter.post("/:id/applications", requireAuth, applyToProject);
 projectsRouter.patch("/:id/applications/:applicationId", requireAuth, updateProjectApplication);
 projectsRouter.post("/:id/files", requireAuth, uploadProjectFile);

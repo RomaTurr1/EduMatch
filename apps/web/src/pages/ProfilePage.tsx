@@ -15,6 +15,7 @@ export function ProfilePage({ user, onUpdate }: Props) {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [saveError, setSaveError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
+  const [firstName, secondName] = splitRealName(user.realName);
 
   function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -52,9 +53,9 @@ export function ProfilePage({ user, onUpdate }: Props) {
         method: "PATCH",
         body: JSON.stringify({
           name: String(formData.get("name")),
-          realName: nullableString(formData.get("realName")),
+          realName: fullName(formData.get("firstName"), formData.get("secondName")),
           age: nullableNumber(formData.get("age")),
-          specialty: nullableString(formData.get("specialty")),
+          specialty: nullableText(formData.get("specialty")),
           bio: String(formData.get("bio")),
           course: String(formData.get("course")),
           university: String(formData.get("university")),
@@ -104,13 +105,19 @@ export function ProfilePage({ user, onUpdate }: Props) {
         <div className="settings-form-grid">
           <div className="settings-fields">
             <label>
-              <span>Name</span>
-              <input name="name" defaultValue={user.name} placeholder="Name" />
+              <span>Display name</span>
+              <input name="name" defaultValue={user.name} placeholder="Nickname" required minLength={2} maxLength={18} />
             </label>
-            <label>
-              <span>Real name</span>
-              <input name="realName" defaultValue={user.realName ?? ""} placeholder="Full name" />
-            </label>
+            <div className="form-grid compact-fields">
+              <label>
+                <span>First name</span>
+                <input name="firstName" defaultValue={firstName} placeholder="Amina" maxLength={40} />
+              </label>
+              <label>
+                <span>Second name</span>
+                <input name="secondName" defaultValue={secondName} placeholder="Sadykova" maxLength={40} />
+              </label>
+            </div>
             <label>
               <span>Age</span>
               <input name="age" type="number" min={13} max={100} defaultValue={user.age ?? ""} placeholder="Age" />
@@ -160,14 +167,26 @@ export function ProfilePage({ user, onUpdate }: Props) {
   );
 }
 
-function nullableString(value: FormDataEntryValue | null) {
+function nullableNumber(value: FormDataEntryValue | null) {
+  const text = String(value ?? "").trim();
+  return text ? Number(text) : null;
+}
+
+function nullableText(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
   return text || null;
 }
 
-function nullableNumber(value: FormDataEntryValue | null) {
-  const text = String(value ?? "").trim();
-  return text ? Number(text) : null;
+function splitRealName(value?: string | null) {
+  const [first = "", ...rest] = String(value ?? "").trim().split(/\s+/).filter(Boolean);
+  return [first, rest.join(" ")];
+}
+
+function fullName(firstName: FormDataEntryValue | null, secondName: FormDataEntryValue | null) {
+  return [firstName, secondName]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join(" ") || null;
 }
 
 function selectedList(formData: FormData, field: string) {

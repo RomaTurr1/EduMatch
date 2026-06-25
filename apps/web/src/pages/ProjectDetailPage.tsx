@@ -269,6 +269,7 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
   const isOwner = project.owner.id === user.id;
   const currentMembership = project.members.find((member) => member.user.id === user.id);
   const canChat = isOwner || Boolean(currentMembership);
+  const canShareInvite = canChat && Boolean(project.inviteCode);
   const canApply = !isOwner && !currentMembership && project.isOpenToJoin && (project.status === "OPEN" || project.status === "IN_PROGRESS");
   const canLeave = !isOwner && Boolean(currentMembership);
   const pinnedFiles = project.files ?? [];
@@ -288,12 +289,14 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
           <p>{project.description}</p>
         </div>
         <div className="project-actions">
-          {isOwner && (
+          {(isOwner || canShareInvite) && (
             <>
-              <button className="secondary compact" onClick={() => setIsEditing((value) => !value)}>
-                {isEditing ? <X size={16} /> : <Edit3 size={16} />}
-                {isEditing ? "Cancel" : "Edit"}
-              </button>
+              {isOwner && (
+                <button className="secondary compact" onClick={() => setIsEditing((value) => !value)}>
+                  {isEditing ? <X size={16} /> : <Edit3 size={16} />}
+                  {isEditing ? "Cancel" : "Edit"}
+                </button>
+              )}
               <div className="project-share-wrap">
                 <button className="secondary compact" onClick={() => setShareMenuOpen((open) => !open)}>
                   <Link size={16} />
@@ -308,10 +311,12 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
                       <Copy size={15} />
                       Copy link
                     </button>
-                    <button type="button" onClick={() => void regenerateInvite()}>
-                      <Link size={15} />
-                      Regenerate link
-                    </button>
+                    {isOwner && (
+                      <button type="button" onClick={() => void regenerateInvite()}>
+                        <Link size={15} />
+                        Regenerate link
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

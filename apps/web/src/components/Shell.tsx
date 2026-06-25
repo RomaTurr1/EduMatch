@@ -14,20 +14,26 @@ type Props = {
   onNavigate: (view: string) => void;
   onSignout: () => void;
   onOpenUserProfile: (userId: string, returnProjectId?: string | null) => void;
+  onOpenProject: (projectId: string) => void;
   children: ReactNode;
 };
 
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "projects", label: "Projects", icon: FolderKanban },
-  { id: "teammates", label: "Teammates", icon: Search }
+  { id: "teammates", label: "Students", icon: Search }
 ];
 
 function getInitials(user: User | null) {
   return (user?.name || user?.email || "?").slice(0, 1).toUpperCase();
 }
 
-export function Shell({ user, view, theme, activeTheme, onToggleTheme, onNavigate, onSignout, onOpenUserProfile, children }: Props) {
+function displayName(value?: string | null) {
+  const name = value || "Guest";
+  return name.length > 18 ? `${name.slice(0, 18)}...` : name;
+}
+
+export function Shell({ user, view, theme, activeTheme, onToggleTheme, onNavigate, onSignout, onOpenUserProfile, onOpenProject, children }: Props) {
   const ThemeIcon = activeTheme === "light" ? Sun : Moon;
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -62,6 +68,16 @@ export function Shell({ user, view, theme, activeTheme, onToggleTheme, onNavigat
       setNotifications((current) => current.map((item) => (item.id === notification.id ? { ...item, readAt: new Date().toISOString() } : item)));
     }
     setNotificationsOpen(false);
+    if (notification.type === "PROJECT_INVITE" && notification.project?.inviteCode) {
+      const result = await api<{ project: { id: string } }>(`/projects/invite/${notification.project.inviteCode}`, { method: "POST" });
+      onOpenProject(result.project.id);
+      void loadNotifications();
+      return;
+    }
+    if (notification.type === "PROJECT_INVITE" && notification.project?.id) {
+      onOpenProject(notification.project.id);
+      return;
+    }
     if (notification.actor?.id) {
       onOpenUserProfile(notification.actor.id, notification.project?.id);
     }
@@ -127,7 +143,7 @@ export function Shell({ user, view, theme, activeTheme, onToggleTheme, onNavigat
               aria-expanded={profileMenuOpen}
               aria-haspopup="menu"
             >
-              <span className="profile-name">{user?.name ?? "Guest"}</span>
+              <span className="profile-name">{displayName(user?.name)}</span>
               <span className="profile-avatar">
                 {user?.avatarUrl ? <img src={user.avatarUrl} alt={user.name} /> : getInitials(user)}
               </span>
@@ -135,7 +151,7 @@ export function Shell({ user, view, theme, activeTheme, onToggleTheme, onNavigat
             {profileMenuOpen && (
               <div className="profile-menu" role="menu">
                 <div className="profile-menu-user">
-                  <strong>{user?.name ?? "Guest"}</strong>
+                  <strong>{displayName(user?.name)}</strong>
                   <small>{user?.university || user?.email || "Find your next team"}</small>
                 </div>
                 <button role="menuitem" onClick={() => navigateFromMenu("profile")}>

@@ -33,6 +33,10 @@ const messageDeleteSchema = z.object({
   scope: z.enum(["me", "everyone"]).default("me")
 });
 
+const projectInviteSchema = z.object({
+  userId: z.string().min(1)
+});
+
 const MAX_PROJECT_FILE_BYTES = 16 * 1024 * 1024;
 const PROJECT_FILE_MIME_EXTENSIONS: Record<string, string> = {
   "application/pdf": ".pdf",
@@ -75,8 +79,12 @@ function canRequestInvite(project: { status: string }) {
   return project.status === "OPEN" || project.status === "IN_PROGRESS";
 }
 
-function redactInviteCode<T extends { ownerId?: string; inviteCode?: string | null }>(project: T, userId: string): T {
-  if (project.ownerId !== userId) {
+function canAccessProjectInvite(project: { ownerId?: string; members?: Array<{ userId?: string; user?: { id?: string } }> }, userId: string) {
+  return project.ownerId === userId || Boolean(project.members?.some((member) => member.userId === userId || member.user?.id === userId));
+}
+
+function redactInviteCode<T extends { ownerId?: string; inviteCode?: string | null; members?: Array<{ userId?: string; user?: { id?: string } }> }>(project: T, userId: string): T {
+  if (!canAccessProjectInvite(project, userId)) {
     return { ...project, inviteCode: null };
   }
   return project;
@@ -376,6 +384,63 @@ export const removeProjectMember = asyncHandler(async (req, res) => {
   });
 
   return res.status(204).send();
+});
+
+export const inviteStudentToProject = asyncHandler(async (req, res) => {
+  const input = projectInviteSchema.parse(req.body);
+  const project = await prisma.project.findUnique({
+    where: { id: req.params.id },
+    include: { members: true }
+  });
+
+  if (!project) {
+    return res.status(404).json({ message: "Project not found" });
+  }
+
+  if (!project.members.some((member) => member.userId === req.user!.userId)) {
+    return res.status(403).json({ message: "Only project members can invite students" });
+  }
+
+  if (project.ownerId === input.userId) {
+    return res.status(400).json({ message: "Project owner is already in this project" });
+  }
+
+  if (!canRequestInvite(project)) {
+    return res.status(403).json({ message: "This project is not accepting invites" });
+  }
+
+  const targetUser = await prisma.user.findUnique({ where: { id: input.userId } });
+  if (!targetUser) {
+    return res.status(404).json({ message: "Student not found" });
+  }
+
+  if (project.members.some((member) => member.userId === input.userId)) {
+    return res.status(409).json({ message: "Student is already in this project" });
+  }
+
+  const existingNotification = await prisma.notification.findFirst({
+    where: {
+      userId: input.userId,
+      actorId: req.user!.userId,
+      projectId: project.id,
+      type: "PROJECT_INVITE",
+      readAt: null
+    }
+  });
+
+  const notification = existingNotification ?? await prisma.notification.create({
+    data: {
+      userId: input.userId,
+      actorId: req.user!.userId,
+      projectId: project.id,
+      type: "PROJECT_INVITE",
+      message: "invited you to join their project"
+    }
+  });
+
+  await addProjectHistory(project.id, req.user!.userId, "student_invited", `Invited ${targetUser.name} to the project`);
+
+  return res.status(existingNotification ? 200 : 201).json({ notification });
 });
 
 export const uploadProjectFile = asyncHandler(async (req, res) => {

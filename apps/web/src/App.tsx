@@ -66,7 +66,7 @@ export function App() {
   }, [user, pendingInviteCode]);
 
   function toggleTheme() {
-    setTheme((current) => (current === "system" ? "dark" : current === "dark" ? "light" : "system"));
+    setTheme((current) => (current === "light" ? "dark" : current === "dark" ? "system" : "light"));
   }
 
   function onAuthenticated(payload: AuthPayload) {
@@ -104,10 +104,10 @@ export function App() {
   if (!user) return <AuthPage theme={theme} activeTheme={activeTheme} onToggleTheme={toggleTheme} onAuthenticated={onAuthenticated} />;
 
   return (
-    <Shell user={user} view={view} theme={theme} activeTheme={activeTheme} onToggleTheme={toggleTheme} onNavigate={setView} onSignout={handleSignout} onOpenUserProfile={openUserProfile}>
+    <Shell user={user} view={view} theme={theme} activeTheme={activeTheme} onToggleTheme={toggleTheme} onNavigate={setView} onSignout={handleSignout} onOpenUserProfile={openUserProfile} onOpenProject={openProjectById}>
       {view === "dashboard" && <DashboardPage onOpenProject={openProject} />}
       {view === "projects" && <ProjectsPage onOpenProject={openProject} />}
-      {view === "teammates" && <TeammatesPage />}
+      {view === "teammates" && <TeammatesPage user={user} onOpenUserProfile={openUserProfile} />}
       {view === "profile" && <ProfilePage user={user} onUpdate={setUser} />}
       {view === "public-profile" && profileUserId && <PublicProfilePage userId={profileUserId} returnProjectId={returnProjectId} onBackToProject={() => returnProjectId && openProjectById(returnProjectId)} />}
       {view === "project-detail" && projectId && <ProjectDetailPage projectId={projectId} user={user} onClose={closeProjectDetail} />}
