@@ -1,4 +1,4 @@
-import { Calendar, Check, Copy, Edit3, FileUp, Link, LogOut, Paperclip, PinOff, Send, Trash2, UserMinus, UsersRound, X } from "lucide-react";
+import { ArrowRight, Calendar, Check, Clock3, Copy, Edit3, FileUp, Link, LogOut, Paperclip, PinOff, Send, Sparkles, Trash2, UserMinus, UsersRound, X } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { TagSelect } from "../components/TagSelect";
@@ -24,7 +24,10 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
   const [editingMessageBody, setEditingMessageBody] = useState("");
   const [messageMenu, setMessageMenu] = useState<{ message: ChatMessage; x: number; y: number } | null>(null);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const [joinAnimation, setJoinAnimation] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const joinAnimationTimer = useRef<number | null>(null);
 
   async function loadProject() {
     const result = await api<{ project: Project }>(`/projects/${projectId}`);
@@ -35,6 +38,14 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
   useEffect(() => {
     loadProject().catch(console.error);
   }, [projectId]);
+
+  useEffect(() => {
+    return () => {
+      if (joinAnimationTimer.current) {
+        window.clearTimeout(joinAnimationTimer.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!project) return;
@@ -66,11 +77,24 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
   }, [messages.length, projectId]);
 
   async function apply() {
-    await api(`/projects/${projectId}/applications`, {
-      method: "POST",
-      body: JSON.stringify({ note: "I would like to join this project." })
-    });
-    await loadProject();
+    setActionError("");
+    setIsJoining(true);
+    try {
+      await api(`/projects/${projectId}/applications`, {
+        method: "POST",
+        body: JSON.stringify({ note: "I would like to join this project." })
+      });
+      await loadProject();
+      setJoinAnimation(true);
+      if (joinAnimationTimer.current) {
+        window.clearTimeout(joinAnimationTimer.current);
+      }
+      joinAnimationTimer.current = window.setTimeout(() => setJoinAnimation(false), 900);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Could not join project");
+    } finally {
+      setIsJoining(false);
+    }
   }
 
   async function removeMember(userId: string) {
@@ -270,10 +294,16 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
   const currentMembership = project.members.find((member) => member.user.id === user.id);
   const canChat = isOwner || Boolean(currentMembership);
   const canShareInvite = canChat && Boolean(project.inviteCode);
-  const canApply = !isOwner && !currentMembership && project.isOpenToJoin && (project.status === "OPEN" || project.status === "IN_PROGRESS");
+  const canApply = !isOwner && !currentMembership && (project.hasPersonalInvite || (project.isOpenToJoin && (project.status === "OPEN" || project.status === "IN_PROGRESS")));
   const canLeave = !isOwner && Boolean(currentMembership);
   const pinnedFiles = project.files ?? [];
   const pendingApplications = (project.applications ?? []).filter((application) => application.status === "PENDING");
+  const allProjectTags = uniqueItems([...project.techStack, ...project.requiredSkills]);
+  const previewDates = [
+    ["Started", project.startedAt],
+    ["Deadline", project.deadlineAt],
+    ["Completed", project.completedAt]
+  ].filter((entry): entry is [string, string] => Boolean(entry[1]));
   const projectDates = [
     ["Created", project.createdAt],
     ["Started", project.startedAt],
@@ -281,8 +311,144 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
     ["Completed", project.completedAt]
   ].filter((entry): entry is [string, string] => Boolean(entry[1]));
 
+  if (!canChat) {
+    return (
+      <section className={`project-detail-page project-preview-page ${isJoining ? "is-joining" : ""}`}>
+        <div className="project-preview-experience">
+          <div className="project-preview-spotlight">
+            <div className="project-preview-spotlight-main">
+              <div className="project-preview-kicker">
+                <span><Sparkles size={14} /> Project room preview</span>
+                <span className={`status ${project.isOpenToJoin || project.hasPersonalInvite ? "" : "muted-status"}`}>{project.hasPersonalInvite ? "Invited" : project.isOpenToJoin ? "Recruiting" : "Closed"}</span>
+              </div>
+              <h1>{project.title}</h1>
+              <p>{project.description}</p>
+              <div className="project-preview-quick-stats">
+                <span><UsersRound size={15} /> {project.members.length} teammates</span>
+                <span><Clock3 size={15} /> {previewDates.length ? "Timeline planned" : "Flexible timeline"}</span>
+                <span><Check size={15} /> {allProjectTags.length || "Open"} tags</span>
+              </div>
+            </div>
+
+            <aside className="project-preview-cta-card">
+              <div className="project-preview-owner">
+                <span className="avatar preview-owner-avatar">
+                  {project.owner.avatarUrl ? <img src={project.owner.avatarUrl} alt={project.owner.name} /> : project.owner.name.slice(0, 1).toUpperCase()}
+                </span>
+                <div>
+                  <span>Project owner</span>
+                  <strong>{project.owner.name}</strong>
+                  <small>{project.owner.specialty || project.owner.university || "Student team lead"}</small>
+                </div>
+              </div>
+              <div className="project-preview-cta-copy">
+                <strong>{project.hasPersonalInvite ? "You are invited" : project.isOpenToJoin ? "Ready to join the room?" : "This room is currently closed"}</strong>
+                <span>{project.hasPersonalInvite ? "Accept the invite and unlock chat, files, and the full project workspace." : project.isOpenToJoin ? "Join now and unlock chat, files, and the full project workspace." : "You can still preview the team, stack, and project structure."}</span>
+              </div>
+              {canApply ? (
+                <button className="primary project-join-button" onClick={() => void apply()} disabled={isJoining}>
+                  {isJoining ? "Joining..." : "Join project"}
+                  <ArrowRight size={18} />
+                </button>
+              ) : (
+                <button className="secondary project-join-button" disabled>
+                  Not accepting joins
+                </button>
+              )}
+              {actionError && <p className="error project-error">{actionError}</p>}
+            </aside>
+          </div>
+
+          <div className="project-preview-command-grid">
+            <article className="project-preview-panel project-preview-panel-map">
+              <div className="project-preview-panel-heading">
+                <span className="mini-icon"><Clock3 size={18} /></span>
+                <div>
+                  <h2>Project map</h2>
+                  <p>Status, dates, and room activity at a glance.</p>
+                </div>
+              </div>
+              <div className="project-preview-stat-grid">
+                <div>
+                  <span>Status</span>
+                  <strong>{formatStatus(project.status)}</strong>
+                </div>
+                <div>
+                  <span>Team</span>
+                  <strong>{project.members.length} active</strong>
+                </div>
+                <div>
+                  <span>Files</span>
+                  <strong>{pinnedFiles.length} pinned</strong>
+                </div>
+              </div>
+              <div className="project-preview-timeline">
+                {previewDates.length ? previewDates.map(([label, value]) => (
+                  <span key={label}>{label}: <strong>{formatDate(value)}</strong></span>
+                )) : <span>No dates planned yet</span>}
+              </div>
+            </article>
+
+            <article className="project-preview-panel project-preview-panel-stack">
+              <div className="project-preview-panel-heading">
+                <span className="mini-icon"><Check size={18} /></span>
+                <div>
+                  <h2>Stack & skills</h2>
+                  <p>What the team is building with.</p>
+                </div>
+              </div>
+              <div className="project-preview-tag-sections">
+                <div>
+                  <span>Tech stack</span>
+                  <div className="tags">
+                    {project.techStack.length ? project.techStack.map((tag) => <span key={tag}>{tag}</span>) : <span>No stack yet</span>}
+                  </div>
+                </div>
+                <div>
+                  <span>Needed skills</span>
+                  <div className="tags">
+                    {project.requiredSkills.length ? project.requiredSkills.map((tag) => <span key={tag}>{tag}</span>) : <span>Open role</span>}
+                  </div>
+                </div>
+                {allProjectTags.length > 0 && (
+                  <div>
+                    <span>Project tags</span>
+                    <div className="tags">
+                      {allProjectTags.map((tag) => <span key={tag}>{tag}</span>)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </article>
+
+            <article className="project-preview-panel project-preview-panel-team">
+              <div className="project-preview-panel-heading">
+                <span className="mini-icon"><UsersRound size={18} /></span>
+                <div>
+                  <h2>Team</h2>
+                  <p>People already inside the room.</p>
+                </div>
+              </div>
+              <div className="project-preview-team-list">
+                {project.members.slice(0, 4).map((member) => (
+                  <div key={member.id}>
+                    <span className="avatar small">{member.user.avatarUrl ? <img src={member.user.avatarUrl} alt={member.user.name} /> : member.user.name.slice(0, 1).toUpperCase()}</span>
+                    <span>
+                      <strong>{member.user.name}</strong>
+                      <small>{member.role}</small>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section>
+    <section className={`project-detail-page ${joinAnimation ? "project-room-enter" : ""}`}>
       <header className="page-header">
         <div>
           <h1>{project.title}</h1>
@@ -328,7 +494,7 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
               Leave
             </button>
           )}
-          {canApply && <button className="primary compact" onClick={apply}>Apply</button>}
+          {canApply && <button className="primary compact" onClick={() => void apply()} disabled={isJoining}>{isJoining ? "Joining..." : "Apply"}</button>}
         </div>
       </header>
       {actionError && <p className="error project-error">{actionError}</p>}
@@ -443,7 +609,7 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
             <span>Stack and roles</span>
           </div>
           <div className="tags">
-            {[...project.techStack, ...project.requiredSkills].map((tag) => <span key={tag}>{tag}</span>)}
+            {allProjectTags.map((tag) => <span key={tag}>{tag}</span>)}
           </div>
           <div className="section-title compact-title">
             <h2>Pinned Files</h2>
@@ -618,6 +784,10 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
 }
 
+function formatStatus(value: Project["status"]) {
+  return value.toLowerCase().replace("_", " ");
+}
+
 function formatTime(value: string) {
   return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
@@ -630,4 +800,8 @@ function formatBytes(value: number) {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function uniqueItems(items: string[]) {
+  return Array.from(new Set(items.filter(Boolean)));
 }

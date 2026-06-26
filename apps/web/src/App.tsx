@@ -105,11 +105,11 @@ export function App() {
 
   return (
     <Shell user={user} view={view} theme={theme} activeTheme={activeTheme} onToggleTheme={toggleTheme} onNavigate={setView} onSignout={handleSignout} onOpenUserProfile={openUserProfile} onOpenProject={openProjectById}>
-      {view === "dashboard" && <DashboardPage onOpenProject={openProject} />}
-      {view === "projects" && <ProjectsPage onOpenProject={openProject} />}
+      {view === "dashboard" && <DashboardPage user={user} onOpenProject={openProject} />}
+      {view === "projects" && <ProjectsPage user={user} onOpenProject={openProject} />}
       {view === "teammates" && <TeammatesPage user={user} onOpenUserProfile={openUserProfile} />}
       {view === "profile" && <ProfilePage user={user} onUpdate={setUser} />}
-      {view === "public-profile" && profileUserId && <PublicProfilePage userId={profileUserId} returnProjectId={returnProjectId} onBackToProject={() => returnProjectId && openProjectById(returnProjectId)} />}
+      {view === "public-profile" && profileUserId && <PublicProfilePage userId={profileUserId} returnProjectId={returnProjectId} onBackToProject={() => returnProjectId && openProjectById(returnProjectId)} onOpenProject={openProjectById} />}
       {view === "project-detail" && projectId && <ProjectDetailPage projectId={projectId} user={user} onClose={closeProjectDetail} />}
     </Shell>
   );

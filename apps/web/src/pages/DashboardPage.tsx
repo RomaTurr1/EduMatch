@@ -2,9 +2,10 @@ import { ArrowRight, FolderKanban, Send, Sparkles, UsersRound } from "lucide-rea
 import { useEffect, useState } from "react";
 import { ProjectCard } from "../components/ProjectCard";
 import { api } from "../services/api";
-import type { Application, Project } from "../types/api";
+import type { Application, Project, User } from "../types/api";
 
 type Props = {
+  user: User;
   onOpenProject: (project: Project) => void;
 };
 
@@ -26,7 +27,7 @@ function formatShortDate(value?: string | null) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
 }
 
-export function DashboardPage({ onOpenProject }: Props) {
+export function DashboardPage({ user, onOpenProject }: Props) {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
 
   useEffect(() => {
@@ -35,7 +36,7 @@ export function DashboardPage({ onOpenProject }: Props) {
 
   const myProjects = dashboard?.myProjects ?? [];
   const myApplications = dashboard?.myApplications ?? [];
-  const recommendedProjects = dashboard?.recommendedProjects ?? [];
+  const recommendedProjects = (dashboard?.recommendedProjects ?? []).filter((project) => !isUserProject(project, user.id));
   const featuredProject = myProjects[0] ?? recommendedProjects[0] ?? null;
   const activeProjects = myProjects.filter((project) => project.status === "OPEN" || project.status === "IN_PROGRESS").length;
   const pendingApplications = myApplications.filter((application) => application.status === "PENDING").length;
@@ -76,7 +77,7 @@ export function DashboardPage({ onOpenProject }: Props) {
               </div>
               <div className="dashboard-project-grid">
                 {myProjects.slice(0, 4).map((project) => (
-                  <ProjectCard key={project.id} project={project} onOpen={onOpenProject} />
+                  <ProjectCard key={project.id} project={project} currentUser={user} onOpen={onOpenProject} />
                 ))}
               </div>
             </section>
@@ -165,4 +166,8 @@ export function DashboardPage({ onOpenProject }: Props) {
       )}
     </section>
   );
+}
+
+function isUserProject(project: Project, userId: string) {
+  return project.owner.id === userId || project.members.some((member) => member.user.id === userId);
 }

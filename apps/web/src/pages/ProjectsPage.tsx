@@ -4,17 +4,19 @@ import { ProjectCard } from "../components/ProjectCard";
 import { TagSelect } from "../components/TagSelect";
 import { SKILL_OPTIONS, TECH_STACK_OPTIONS } from "../constants/skillOptions";
 import { api } from "../services/api";
-import type { Project } from "../types/api";
+import type { Project, User } from "../types/api";
 
 type Props = {
+  user: User;
   onOpenProject: (project: Project) => void;
 };
 
-export function ProjectsPage({ onOpenProject }: Props) {
+export function ProjectsPage({ user, onOpenProject }: Props) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [filters, setFilters] = useState({ q: "", tech: "", skills: "" });
   const [showCreate, setShowCreate] = useState(false);
   const [createError, setCreateError] = useState("");
+  const visibleProjects = projects.filter((project) => !isUserProject(project, user.id));
 
   async function loadProjects() {
     const params = new URLSearchParams();
@@ -131,8 +133,8 @@ export function ProjectsPage({ onOpenProject }: Props) {
         </form>
       )}
       <div className="grid">
-        {projects.map((project) => (
-          <ProjectCard key={project.id} project={project} onOpen={onOpenProject} />
+        {visibleProjects.map((project) => (
+          <ProjectCard key={project.id} project={project} currentUser={user} onOpen={onOpenProject} />
         ))}
       </div>
     </section>
@@ -149,4 +151,8 @@ function selectedList(formData: FormData, field: string) {
 function nullableDate(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
   return text || null;
+}
+
+function isUserProject(project: Project, userId: string) {
+  return project.owner.id === userId || project.members.some((member) => member.user.id === userId);
 }

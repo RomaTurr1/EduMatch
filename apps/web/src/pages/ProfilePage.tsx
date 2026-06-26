@@ -139,7 +139,7 @@ export function ProfilePage({ user, onUpdate }: Props) {
               <textarea name="bio" defaultValue={user.bio ?? ""} placeholder="Tell teammates a little about yourself" />
             </label>
             <div className="field-block">
-              <TagSelect name="skills" label="Skills" options={CHARACTERISTIC_OPTIONS} defaultValue={user.skills} />
+              <TagSelect name="skills" label="Skills" options={CHARACTERISTIC_OPTIONS} defaultValue={user.skills} showSelectedStrip />
             </div>
           </div>
           <aside className="profile-picture-panel">

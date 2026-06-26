@@ -79,6 +79,13 @@ function canRequestInvite(project: { status: string }) {
   return project.status === "OPEN" || project.status === "IN_PROGRESS";
 }
 
+async function hasProjectInvitation(projectId: string, userId: string) {
+  return Boolean(await prisma.notification.findFirst({
+    where: { projectId, userId, type: "PROJECT_INVITE", readAt: null },
+    select: { id: true }
+  }));
+}
+
 function canAccessProjectInvite(project: { ownerId?: string; members?: Array<{ userId?: string; user?: { id?: string } }> }, userId: string) {
   return project.ownerId === userId || Boolean(project.members?.some((member) => member.userId === userId || member.user?.id === userId));
 }
@@ -227,7 +234,9 @@ export const getProject = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "Project not found" });
   }
 
-  return res.json({ project: redactInviteCode(project, req.user!.userId) });
+  const hasPersonalInvite = await hasProjectInvitation(project.id, req.user!.userId);
+
+  return res.json({ project: { ...redactInviteCode(project, req.user!.userId), hasPersonalInvite } });
 });
 
 export const updateProject = asyncHandler(async (req, res) => {
@@ -311,7 +320,11 @@ export const applyToProject = asyncHandler(async (req, res) => {
     if (!project) {
       throw Object.assign(new Error("Project not found"), { status: 404 });
     }
-    if (!canJoinProject(project)) {
+    const hasPersonalInvite = Boolean(await tx.notification.findFirst({
+      where: { projectId: project.id, userId: req.user!.userId, type: "PROJECT_INVITE", readAt: null },
+      select: { id: true }
+    }));
+    if (!canJoinProject(project) && !hasPersonalInvite) {
       throw Object.assign(new Error("This project is not accepting applications"), { status: 403 });
     }
 
@@ -326,6 +339,10 @@ export const applyToProject = asyncHandler(async (req, res) => {
       update: {},
       create: { projectId: req.params.id, userId: req.user!.userId, role: "member" }
     });
+    await tx.notification.updateMany({
+      where: { projectId: project.id, userId: req.user!.userId, type: "PROJECT_INVITE" },
+      data: { readAt: new Date() }
+    });
     await tx.projectHistory.create({
       data: {
         projectId: req.params.id,
@@ -338,6 +355,64 @@ export const applyToProject = asyncHandler(async (req, res) => {
     return nextApplication;
   });
   return res.status(201).json({ application });
+});
+
+export const acceptProjectInvitationForCurrentUser = asyncHandler(async (req, res) => {
+  const project = await prisma.project.findUnique({
+    where: { id: req.params.id },
+    include: projectInclude()
+  });
+
+  if (!project) {
+    return res.status(404).json({ message: "Project not found" });
+  }
+
+  const existingMembership = project.members.find((member) => member.userId === req.user!.userId);
+  if (existingMembership) {
+    return res.json({ action: "already_member", project: redactInviteCode(project, req.user!.userId) });
+  }
+
+  const invitation = await prisma.notification.findFirst({
+    where: {
+      userId: req.user!.userId,
+      projectId: project.id,
+      type: "PROJECT_INVITE",
+      readAt: null
+    },
+    select: { id: true }
+  });
+
+  if (!invitation) {
+    return res.status(403).json({ message: "You do not have an invitation to this project" });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.application.upsert({
+      where: { projectId_userId: { projectId: project.id, userId: req.user!.userId } },
+      update: { status: "ACCEPTED" },
+      create: { projectId: project.id, userId: req.user!.userId, status: "ACCEPTED" }
+    });
+    await tx.projectMember.upsert({
+      where: { projectId_userId: { projectId: project.id, userId: req.user!.userId } },
+      update: {},
+      create: { projectId: project.id, userId: req.user!.userId, role: "member" }
+    });
+    await tx.notification.updateMany({
+      where: { projectId: project.id, userId: req.user!.userId, type: "PROJECT_INVITE" },
+      data: { readAt: new Date() }
+    });
+    await tx.projectHistory.create({
+      data: {
+        projectId: project.id,
+        userId: req.user!.userId,
+        action: "joined",
+        message: "Joined the project"
+      }
+    });
+  });
+
+  const updated = await prisma.project.findUniqueOrThrow({ where: { id: project.id }, include: projectInclude() });
+  return res.json({ action: "joined", project: redactInviteCode(updated, req.user!.userId) });
 });
 
 export const removeProjectMember = asyncHandler(async (req, res) => {

@@ -1,19 +1,24 @@
 import { Calendar, Lock, Sparkles, Unlock, UserRound, Users } from "lucide-react";
-import type { Project } from "../types/api";
+import type { Project, User } from "../types/api";
 
 type Props = {
   project: Project;
+  currentUser?: User;
   onOpen: (project: Project) => void;
 };
 
-export function ProjectCard({ project, onOpen }: Props) {
+export function ProjectCard({ project, currentUser, onOpen }: Props) {
   const matchSkills = new Set(project.matchSkills?.map(normalizeTag) ?? []);
   const tags = Array.from(new Set([...project.techStack, ...project.requiredSkills])).slice(0, 8);
+  const isMyProject = currentUser ? project.owner.id === currentUser.id : false;
 
   return (
     <article className="project-card clickable" onClick={() => onOpen(project)} tabIndex={0} role="button" onKeyDown={(event) => event.key === "Enter" && onOpen(project)}>
       <div className="card-header">
-        <span className="status">{project.status.replace("_", " ")}</span>
+        <div className="project-card-status-group">
+          <span className="status">{project.status.replace("_", " ")}</span>
+          {isMyProject && <span className="status project-card-my-status">MY</span>}
+        </div>
         <span className={`status ${project.isOpenToJoin ? "" : "muted-status"}`}>
           {project.isOpenToJoin ? <Unlock size={13} /> : <Lock size={13} />}
           {project.isOpenToJoin ? "Recruiting" : "Closed"}

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  acceptProjectInvitationForCurrentUser,
   applyToProject,
   createProject,
   deleteProject,
@@ -31,6 +32,7 @@ projectsRouter.delete("/:id", requireAuth, deleteProject);
 projectsRouter.delete("/:id/membership", requireAuth, leaveProject);
 projectsRouter.post("/:id/invite/regenerate", requireAuth, regenerateProjectInvite);
 projectsRouter.post("/:id/invitations", requireAuth, inviteStudentToProject);
+projectsRouter.post("/:id/invitations/accept", requireAuth, acceptProjectInvitationForCurrentUser);
 projectsRouter.post("/:id/applications", requireAuth, applyToProject);
 projectsRouter.patch("/:id/applications/:applicationId", requireAuth, updateProjectApplication);
 projectsRouter.post("/:id/files", requireAuth, uploadProjectFile);

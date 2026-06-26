@@ -62,21 +62,22 @@ export function Shell({ user, view, theme, activeTheme, onToggleTheme, onNavigat
     void onSignout();
   }
 
+  async function clearNotifications() {
+    await api("/notifications", { method: "DELETE" });
+    setNotifications([]);
+  }
+
   async function openNotification(notification: Notification) {
-    if (!notification.readAt) {
-      await api(`/notifications/${notification.id}/read`, { method: "PATCH" }).catch(() => undefined);
-      setNotifications((current) => current.map((item) => (item.id === notification.id ? { ...item, readAt: new Date().toISOString() } : item)));
-    }
     setNotificationsOpen(false);
-    if (notification.type === "PROJECT_INVITE" && notification.project?.inviteCode) {
-      const result = await api<{ project: { id: string } }>(`/projects/invite/${notification.project.inviteCode}`, { method: "POST" });
+    if (notification.type === "PROJECT_INVITE" && notification.project?.id) {
+      const result = await api<{ project: { id: string } }>(`/projects/${notification.project.id}/invitations/accept`, { method: "POST" });
       onOpenProject(result.project.id);
       void loadNotifications();
       return;
     }
-    if (notification.type === "PROJECT_INVITE" && notification.project?.id) {
-      onOpenProject(notification.project.id);
-      return;
+    if (!notification.readAt) {
+      await api(`/notifications/${notification.id}/read`, { method: "PATCH" }).catch(() => undefined);
+      setNotifications((current) => current.map((item) => (item.id === notification.id ? { ...item, readAt: new Date().toISOString() } : item)));
     }
     if (notification.actor?.id) {
       onOpenUserProfile(notification.actor.id, notification.project?.id);
@@ -110,6 +111,7 @@ export function Shell({ user, view, theme, activeTheme, onToggleTheme, onNavigat
         </nav>
         <div className="topbar-actions">
           <button className="notification-button" title="Notifications" onClick={() => {
+            setProfileMenuOpen(false);
             setNotificationsOpen((open) => !open);
             void loadNotifications();
           }}>
@@ -119,8 +121,15 @@ export function Shell({ user, view, theme, activeTheme, onToggleTheme, onNavigat
           {notificationsOpen && (
             <div className="notifications-menu">
               <div className="notifications-header">
-                <strong>Notifications</strong>
-                <small>{unreadCount} unread</small>
+                <div>
+                  <strong>Notifications</strong>
+                  <small>{unreadCount} unread</small>
+                </div>
+                {notifications.length > 0 && (
+                  <button className="notifications-clear" type="button" onClick={() => void clearNotifications()}>
+                    Clear
+                  </button>
+                )}
               </div>
               {notifications.length === 0 ? (
                 <p>No notifications yet</p>
@@ -138,7 +147,10 @@ export function Shell({ user, view, theme, activeTheme, onToggleTheme, onNavigat
           <div className="profile-menu-wrap">
             <button
               className={`profile-trigger ${view === "profile" || profileMenuOpen ? "active" : ""}`}
-              onClick={() => setProfileMenuOpen((open) => !open)}
+              onClick={() => {
+                setNotificationsOpen(false);
+                setProfileMenuOpen((open) => !open);
+              }}
               title="Profile menu"
               aria-expanded={profileMenuOpen}
               aria-haspopup="menu"

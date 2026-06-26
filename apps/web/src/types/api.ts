@@ -11,6 +11,18 @@ export type User = {
   avatarUrl?: string | null;
   skills: string[];
   rating: number;
+  projects?: ProfileProject[];
+};
+
+export type ProfileProject = {
+  id: string;
+  title: string;
+  description: string;
+  status: Project["status"];
+  techStack: string[];
+  requiredSkills: string[];
+  memberCount: number;
+  role: string;
 };
 
 export type Project = {
@@ -37,6 +49,7 @@ export type Project = {
   matchPercent?: number;
   matchSkills?: string[];
   matchReasons?: string[];
+  hasPersonalInvite?: boolean;
 };
 
 export type Application = {

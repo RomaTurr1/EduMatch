@@ -49,3 +49,11 @@ export const markNotificationRead = asyncHandler(async (req, res) => {
 
   return res.json({ notification: updated });
 });
+
+export const clearNotifications = asyncHandler(async (req, res) => {
+  await prisma.notification.deleteMany({
+    where: { userId: req.user!.userId }
+  });
+
+  return res.status(204).send();
+});

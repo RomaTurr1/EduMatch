@@ -1,6 +1,7 @@
 import { ChevronDown, GraduationCap, Mail, Send, Search, UserRound, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { TagSelect } from "../components/TagSelect";
 import { CHARACTERISTIC_OPTIONS } from "../constants/skillOptions";
 import { api } from "../services/api";
 import type { Project, User } from "../types/api";
@@ -156,7 +157,6 @@ export function TeammatesPage({ user, onOpenUserProfile }: Props) {
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const [loading, setLoading] = useState(false);
   const [openFilter, setOpenFilter] = useState<string | null>(null);
-  const [skillQuery, setSkillQuery] = useState("");
   const [inviteState, setInviteState] = useState<{ userId: string; projectId: string } | null>(null);
   const [inviteTarget, setInviteTarget] = useState<User | null>(null);
   const [skillListTarget, setSkillListTarget] = useState<User | null>(null);
@@ -202,23 +202,14 @@ export function TeammatesPage({ user, onOpenUserProfile }: Props) {
     void loadStudents(nextFilters);
   }
 
-  function toggleSkill(skill: string) {
-    const exists = filters.skills.includes(skill);
-    const nextSkills = exists ? filters.skills.filter((item) => item !== skill) : [...filters.skills, skill];
+  function updateSkillFilter(nextSkills: string[]) {
     const nextFilters = { ...filters, skills: nextSkills };
-    setFilters(nextFilters);
-    void loadStudents(nextFilters);
-  }
-
-  function removeSkill(skill: string) {
-    const nextFilters = { ...filters, skills: filters.skills.filter((item) => item !== skill) };
     setFilters(nextFilters);
     void loadStudents(nextFilters);
   }
 
   async function resetFilters() {
     setFilters(INITIAL_FILTERS);
-    setSkillQuery("");
     setOpenFilter(null);
     await loadStudents(INITIAL_FILTERS);
   }
@@ -264,19 +255,12 @@ export function TeammatesPage({ user, onOpenUserProfile }: Props) {
               placeholder="Name or specialty"
             />
           </label>
-          <SkillFilterMenu
-            value={filters.skills}
+          <TagSelect
+            name="studentSkills"
+            label="Skills"
             options={CHARACTERISTIC_OPTIONS}
-            query={skillQuery}
-            isOpen={openFilter === "skills"}
-            onQueryChange={setSkillQuery}
-            onToggle={() => setOpenFilter((current) => (current === "skills" ? null : "skills"))}
-            onChange={toggleSkill}
-            onClear={() => {
-              const nextFilters = { ...filters, skills: [] };
-              setFilters(nextFilters);
-              void loadStudents(nextFilters);
-            }}
+            value={filters.skills}
+            onChange={updateSkillFilter}
           />
           <FilterMenu
             id="university"
@@ -299,9 +283,8 @@ export function TeammatesPage({ user, onOpenUserProfile }: Props) {
           <button type="submit">{loading ? "Searching" : "Search"}</button>
           <button type="button" className="secondary icon-only" onClick={() => void resetFilters()} title="Reset filters"><X size={18} /></button>
         </div>
-        {(filters.skills.length > 0 || filters.university || filters.course) && (
+        {(filters.university || filters.course) && (
           <div className="active-filters">
-            {filters.skills.map((skill) => <button type="button" key={skill} onClick={() => removeSkill(skill)}>{skill}<X size={14} /></button>)}
             {filters.university && <button type="button" onClick={() => toggleFilter("university", filters.university)}>{filters.university}<X size={14} /></button>}
             {filters.course && <button type="button" onClick={() => toggleFilter("course", filters.course)}>{filters.course}<X size={14} /></button>}
           </div>
@@ -457,72 +440,6 @@ function InviteProjectModal({ student, projects, query, error, loadingProjectId,
           {filteredProjects.length === 0 && <p className="empty-state">No projects found. Try another title or skill.</p>}
         </div>
       </section>
-    </div>
-  );
-}
-
-type SkillFilterMenuProps = {
-  value: string[];
-  options: string[];
-  query: string;
-  isOpen: boolean;
-  onToggle: () => void;
-  onQueryChange: (value: string) => void;
-  onChange: (value: string) => void;
-  onClear: () => void;
-};
-
-function SkillFilterMenu({ value, options, query, isOpen, onToggle, onQueryChange, onChange, onClear }: SkillFilterMenuProps) {
-  const normalizedQuery = query.trim().toLowerCase();
-  const filteredOptions = normalizedQuery
-    ? options.filter((option) => option.toLowerCase().includes(normalizedQuery))
-    : options;
-
-  return (
-    <div className="filter-menu-wrap">
-      <button
-        type="button"
-        className={`filter-menu-trigger ${value.length ? "selected" : ""}`}
-        onClick={onToggle}
-        aria-expanded={isOpen}
-        aria-controls="skills-menu"
-      >
-        <span>{value.length === 0 ? "Skills" : value.length === 1 ? value[0] : `${value.length} skills`}</span>
-        <ChevronDown size={16} />
-      </button>
-      {isOpen && (
-        <div className="filter-menu skill-filter-menu" id="skills-menu">
-          <label className="filter-menu-search">
-            <Search size={15} />
-            <input
-              value={query}
-              onChange={(event) => onQueryChange(event.target.value)}
-              placeholder="Type skill"
-              autoFocus
-            />
-          </label>
-          {value.length > 0 && (
-            <button type="button" className="filter-menu-action" onClick={onClear}>
-              Clear selected skills
-            </button>
-          )}
-          {filteredOptions.map((option) => {
-            const selected = value.includes(option);
-            return (
-              <button
-                key={option}
-                type="button"
-                className={selected ? "selected" : ""}
-                onClick={() => onChange(option)}
-                aria-pressed={selected}
-              >
-                {option}
-              </button>
-            );
-          })}
-          {filteredOptions.length === 0 && <span className="filter-menu-empty">No matching skills</span>}
-        </div>
-      )}
     </div>
   );
 }
