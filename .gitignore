@@ -24,6 +24,7 @@ dist/
 build/
 uploads/
 apps/api/uploads/
+backups/
 
 # OS / tooling
 .DS_Store
