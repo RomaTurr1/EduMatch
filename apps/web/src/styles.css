@@ -3808,7 +3808,7 @@ textarea {
   align-self: start;
   display: flex;
   flex-direction: column;
-  height: clamp(620px, calc(100vh - 112px), 820px);
+  height: clamp(720px, calc(100vh - 24px), 980px);
   min-height: 0;
   padding: clamp(18px, 3vw, 24px);
 }
@@ -4300,7 +4300,7 @@ h3,
   }
 
   .chat-panel {
-    height: min(740px, calc(100vh - 96px));
+    height: min(860px, calc(100vh + 48px));
   }
 
   .hero-actions,

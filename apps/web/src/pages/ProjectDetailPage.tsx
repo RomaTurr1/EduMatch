@@ -570,7 +570,12 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
           <div className="member-list">
             {project.members.map((member) => (
               <div key={member.id}>
-                <span className="member-person"><span className="avatar small">{member.user.name.slice(0, 1).toUpperCase()}</span><strong>{member.user.name}</strong></span>
+                <span className="member-person">
+                  <span className="avatar small">
+                    {member.user.avatarUrl ? <img src={member.user.avatarUrl} alt={member.user.name} /> : member.user.name.slice(0, 1).toUpperCase()}
+                  </span>
+                  <strong>{member.user.name}</strong>
+                </span>
                 <span className="member-actions">
                   <span className="status">{member.role}</span>
                   {isOwner && member.user.id !== user.id && member.role !== "owner" && (
@@ -592,7 +597,9 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
                 {pendingApplications.map((application) => (
                   <div key={application.id}>
                     <span className="member-person">
-                      <span className="avatar small">{application.user?.name.slice(0, 1).toUpperCase()}</span>
+                      <span className="avatar small">
+                        {application.user?.avatarUrl ? <img src={application.user.avatarUrl} alt={application.user.name} /> : application.user?.name.slice(0, 1).toUpperCase()}
+                      </span>
                       <strong>{application.user?.name}</strong>
                     </span>
                     <span className="member-actions">
