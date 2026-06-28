@@ -3032,7 +3032,7 @@ textarea {
 .detail-layout {
   display: grid;
   grid-template-columns: minmax(260px, 380px) minmax(0, 1fr);
-  align-items: stretch;
+  align-items: start;
   gap: 20px;
 }
 
@@ -3805,20 +3805,24 @@ textarea {
 }
 
 .chat-panel {
-  align-self: stretch;
+  align-self: start;
   display: flex;
   flex-direction: column;
+  height: clamp(620px, calc(100vh - 112px), 820px);
+  min-height: 0;
   padding: clamp(18px, 3vw, 24px);
 }
 
 .messages {
   flex: 1;
-  min-height: clamp(460px, 58vh, 680px);
+  min-height: 0;
   overflow: auto;
   display: grid;
   align-content: start;
   gap: 8px;
   padding: 16px 8px 16px 0;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .message-row {
@@ -4293,6 +4297,10 @@ h3,
   .profile-form,
   .chat-panel {
     border-radius: 20px;
+  }
+
+  .chat-panel {
+    height: min(740px, calc(100vh - 96px));
   }
 
   .hero-actions,

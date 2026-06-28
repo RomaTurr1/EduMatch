@@ -9,6 +9,31 @@ type UploadedFile = {
   size: number;
 };
 
+function decodeHeaderValue(value: string) {
+  return Buffer.from(value, "latin1").toString("utf8");
+}
+
+function decodeRfc5987Value(value: string) {
+  const match = value.match(/^([^']*)''(.+)$/);
+  if (!match) return decodeHeaderValue(value);
+
+  try {
+    return decodeURIComponent(match[2]);
+  } catch {
+    return decodeHeaderValue(match[2]);
+  }
+}
+
+function filenameFromDisposition(disposition: string) {
+  const encodedFilename = disposition.match(/filename\*=([^;]+)/i)?.[1]?.trim().replace(/^"|"$/g, "");
+  if (encodedFilename) {
+    return decodeRfc5987Value(encodedFilename);
+  }
+
+  const filename = disposition.match(/filename="([^"]+)"/)?.[1];
+  return filename ? decodeHeaderValue(filename) : "upload";
+}
+
 export async function readSingleFileUpload(
   req: Request,
   fieldName: string,
@@ -44,7 +69,7 @@ export async function readSingleFileUpload(
     const disposition = rawHeaders.match(/content-disposition:\s*form-data;[^\r\n]*/i)?.[0] ?? "";
     if (!new RegExp(`name="${fieldName}"`).test(disposition)) continue;
 
-    const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? "upload";
+    const filename = filenameFromDisposition(disposition);
     const mimeType = rawHeaders.match(/content-type:\s*([^\r\n]+)/i)?.[1]?.trim().toLowerCase() ?? "";
     const data = Buffer.from(rawData, "latin1");
 

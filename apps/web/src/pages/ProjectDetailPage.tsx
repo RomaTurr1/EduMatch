@@ -629,7 +629,7 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
                 <div key={file.id}>
                   <a className="file-row" href={file.url} target="_blank" rel="noreferrer">
                     <Paperclip size={16} />
-                    <strong>{file.originalName}</strong>
+                    <strong>{displayFileName(file.originalName)}</strong>
                   </a>
                   <span className="member-actions">
                     <span>{formatBytes(file.size)}</span>
@@ -689,16 +689,16 @@ export function ProjectDetailPage({ projectId, user, onClose }: Props) {
                         </div>
                       ) : isCompactMessage ? (
                         <div className="message-inline">
-                          <p>{message.body}</p>
+                          <p>{displayMessageBody(message.body)}</p>
                           <span className="message-time">{formatTime(message.createdAt)}</span>
                         </div>
                       ) : (
-                        <p>{message.body}</p>
+                        <p>{displayMessageBody(message.body)}</p>
                       )}
                       {message.files?.map((file) => (
                         <a key={file.id} className="message-file" href={file.url} target="_blank" rel="noreferrer">
                           <Paperclip size={15} />
-                          {file.originalName}
+                          {displayFileName(file.originalName)}
                         </a>
                       ))}
                       {!isCompactMessage && (
@@ -778,6 +778,26 @@ function nullableDate(value: FormDataEntryValue | null) {
 
 function dateInputValue(value?: string | null) {
   return value ? value.slice(0, 10) : "";
+}
+
+function decodeMojibake(value: string) {
+  if (!/[ÃÐÑ]/.test(value)) return value;
+
+  try {
+    const bytes = Uint8Array.from(value, (char) => char.charCodeAt(0) & 0xff);
+    const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return decoded.includes("\uFFFD") ? value : decoded;
+  } catch {
+    return value;
+  }
+}
+
+function displayMessageBody(value: string) {
+  return value.startsWith("Shared a file: ") ? decodeMojibake(value) : value;
+}
+
+function displayFileName(value: string) {
+  return decodeMojibake(value);
 }
 
 function formatDate(value: string) {
