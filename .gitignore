@@ -6,6 +6,7 @@ AI_RULES.md
 AI_CHANGELOG.md
 AI_TODO.md
 AI_RUNBOOK.md
+AI_DEPLOYMENT.md
 CLAUDE.md
 ПОМЕТКИ_ДЛЯ_ПОЛЬЗОВАТЕЛЯ.txt
 ИНСТРУКЦИЯ_ДЛЯ_ЗАЩИТЫ.txt
@@ -25,6 +26,7 @@ build/
 uploads/
 apps/api/uploads/
 backups/
+backup-copies/
 
 # OS / tooling
 .DS_Store
