@@ -1,4 +1,4 @@
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ProjectCard } from "../components/ProjectCard";
 import { TagSelect } from "../components/TagSelect";
@@ -13,14 +13,18 @@ type Props = {
 
 export function ProjectsPage({ user, onOpenProject }: Props) {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [filters, setFilters] = useState({ q: "", tech: "", skills: "" });
+  const [filters, setFilters] = useState({ q: "", tech: [] as string[], skills: [] as string[] });
   const [showCreate, setShowCreate] = useState(false);
   const [createError, setCreateError] = useState("");
   const visibleProjects = projects.filter((project) => !isUserProject(project, user.id));
 
-  async function loadProjects() {
+  async function loadProjects(nextFilters = filters) {
     const params = new URLSearchParams();
-    Object.entries(filters).forEach(([key, value]) => value && params.set(key, value));
+    Object.entries(nextFilters).forEach(([key, value]) => {
+      const text = Array.isArray(value) ? value.join(",") : value.trim();
+      if (!text) return;
+      params.set(key, text);
+    });
     const result = await api<{ projects: Project[] }>(`/projects?${params}`);
     setProjects(result.projects);
   }
@@ -28,6 +32,18 @@ export function ProjectsPage({ user, onOpenProject }: Props) {
   useEffect(() => {
     loadProjects().catch(console.error);
   }, []);
+
+  function updateProjectTagFilter(field: "tech" | "skills", value: string[]) {
+    const nextFilters = { ...filters, [field]: value };
+    setFilters(nextFilters);
+    void loadProjects(nextFilters);
+  }
+
+  async function resetFilters() {
+    const nextFilters = { q: "", tech: [] as string[], skills: [] as string[] };
+    setFilters(nextFilters);
+    await loadProjects(nextFilters);
+  }
 
   async function createProject(formData: FormData) {
     setCreateError("");
@@ -65,27 +81,40 @@ export function ProjectsPage({ user, onOpenProject }: Props) {
           New
         </button>
       </header>
-      <div className="toolbar">
-        <label>
-          <Search size={16} />
-          <input
-            value={filters.q}
-            onChange={(event) => setFilters({ ...filters, q: event.target.value })}
-            placeholder="Title"
+      <form
+        className="students-search compact-student-search"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void loadProjects();
+        }}
+      >
+        <div className="students-search-row projects-search-row">
+          <label>
+            <Search size={16} />
+            <input
+              value={filters.q}
+              onChange={(event) => setFilters({ ...filters, q: event.target.value })}
+              placeholder="Title"
+            />
+          </label>
+          <TagSelect
+            name="projectTechStack"
+            label="Tech stack"
+            options={TECH_STACK_OPTIONS}
+            value={filters.tech}
+            onChange={(value) => updateProjectTagFilter("tech", value)}
           />
-        </label>
-        <input
-          value={filters.tech}
-          onChange={(event) => setFilters({ ...filters, tech: event.target.value })}
-          placeholder="Tech stack"
-        />
-        <input
-          value={filters.skills}
-          onChange={(event) => setFilters({ ...filters, skills: event.target.value })}
-          placeholder="Skills"
-        />
-        <button onClick={loadProjects}>Filter</button>
-      </div>
+          <TagSelect
+            name="projectSkills"
+            label="Skills"
+            options={SKILL_OPTIONS}
+            value={filters.skills}
+            onChange={(value) => updateProjectTagFilter("skills", value)}
+          />
+          <button type="submit">Search</button>
+          <button type="button" className="secondary icon-only" onClick={() => void resetFilters()} title="Reset filters"><X size={18} /></button>
+        </div>
+      </form>
       {showCreate && (
         <form
           className="inline-form"

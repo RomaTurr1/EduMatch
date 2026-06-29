@@ -1522,6 +1522,10 @@ textarea {
   gap: 0;
 }
 
+.projects-search-row {
+  grid-template-columns: minmax(260px, 1fr) repeat(2, minmax(150px, auto)) auto 44px;
+}
+
 .students-search-row .tag-select legend {
   display: none;
 }

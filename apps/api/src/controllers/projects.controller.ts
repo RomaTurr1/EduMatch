@@ -163,15 +163,15 @@ async function saveProjectUpload(req: Parameters<typeof readSingleFileUpload>[0]
 
 export const listProjects = asyncHandler(async (req, res) => {
   const q = typeof req.query.q === "string" ? req.query.q : undefined;
-  const tech = typeof req.query.tech === "string" ? req.query.tech.split(",").filter(Boolean) : [];
-  const skills = typeof req.query.skills === "string" ? req.query.skills.split(",").filter(Boolean) : [];
+  const tech = typeof req.query.tech === "string" ? req.query.tech.split(",").map((item) => item.trim()).filter(Boolean) : [];
+  const skills = typeof req.query.skills === "string" ? req.query.skills.split(",").map((item) => item.trim()).filter(Boolean) : [];
 
   const projects = await prisma.project.findMany({
     where: {
       AND: [
         q ? { title: { contains: q, mode: "insensitive" } } : {},
-        tech.length ? { techStack: { hasSome: tech } } : {},
-        skills.length ? { requiredSkills: { hasSome: skills } } : {}
+        tech.length ? { techStack: { hasEvery: tech } } : {},
+        skills.length ? { requiredSkills: { hasEvery: skills } } : {}
       ]
     },
     include: projectInclude(),

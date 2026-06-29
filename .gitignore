@@ -10,6 +10,8 @@ AI_DEPLOYMENT.md
 CLAUDE.md
 ПОМЕТКИ_ДЛЯ_ПОЛЬЗОВАТЕЛЯ.txt
 ИНСТРУКЦИЯ_ДЛЯ_ЗАЩИТЫ.txt
+.agents/
+.codex/
 
 # Environment variables
 .env
